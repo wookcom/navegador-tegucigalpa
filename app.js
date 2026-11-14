@@ -14,7 +14,7 @@ const SATELLITE_HYBRID_STYLE = {
         "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
       ],
       tileSize: 256,
-      maxzoom: 19,
+      maxzoom: 18,
       attribution: "Esri, Maxar, Earthstar Geographics"
     },
     "esri-roads": {
@@ -23,7 +23,7 @@ const SATELLITE_HYBRID_STYLE = {
         "https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}"
       ],
       tileSize: 256,
-      maxzoom: 19
+      maxzoom: 15
     },
     "esri-labels": {
       type: "raster",
@@ -31,7 +31,7 @@ const SATELLITE_HYBRID_STYLE = {
         "https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
       ],
       tileSize: 256,
-      maxzoom: 19
+      maxzoom: 14
     }
   },
   layers: [
@@ -329,6 +329,7 @@ const state = {
   mainCoords: [],
   cumDistances: [],
   steps: [],
+  activeCheckpoints: [],
   totalDistance: 0,
   totalDuration: 0,
 
@@ -336,6 +337,7 @@ const state = {
   simPlaying: false,
   simSpeed: 1,
   simDistMeters: 0,
+  lastAlongMeters: 0,
   vehiclePos: null,
   vehicleHeading: 0,
   deviceHeading: null,
@@ -345,9 +347,16 @@ const state = {
 
   camera3d: true,
   theme: "satellite", // Vista de satélite híbrida por defecto
+  showRouteLine: true,
+  cleanUiMode: false,
   voiceEnabled: true,
   pickMode: false,
   spokenAlerts: new Set(),
+
+  activeCheckpointId: null,
+  dismissedCheckpointId: null,
+  bridgeAlertShownAt: 0,
+  lastSpokenContextId: null,
 
   map: null,
   mapReady: false,
@@ -372,6 +381,7 @@ const el = {
   bridgeAlertTitle: document.getElementById("bridgeAlertTitle"),
   bridgeAlertDist: document.getElementById("bridgeAlertDist"),
   bridgePathsGrid: document.getElementById("bridgePathsGrid"),
+  btnDismissBridgeAlert: document.getElementById("btnDismissBridgeAlert"),
 
   checkpointStrip: document.getElementById("checkpointStrip"),
   legFilterPills: document.getElementById("legFilterPills"),
@@ -387,7 +397,11 @@ const el = {
   btnToggleItinerary: document.getElementById("btnToggleItinerary"),
   btnToggleCamera: document.getElementById("btnToggleCamera"),
   btnToggleTheme: document.getElementById("btnToggleTheme"),
+  btnToggleRouteLine: document.getElementById("btnToggleRouteLine"),
+  btnToggleCleanUi: document.getElementById("btnToggleCleanUi"),
   btnToggleVoice: document.getElementById("btnToggleVoice"),
+  btnZoomIn: document.getElementById("btnZoomIn"),
+  btnZoomOut: document.getElementById("btnZoomOut"),
 
   itineraryModal: document.getElementById("itineraryModal"),
   btnCloseModal: document.getElementById("btnCloseModal"),
@@ -439,22 +453,33 @@ function formatDistance(meters) {
   return `${(meters / 1000).toFixed(1)} km`;
 }
 
-function showToast(msg, ms = 3000) {
+function showToast(msg, ms = 2500) {
   el.toastMsg.textContent = msg;
   el.toastMsg.classList.remove("hidden");
   clearTimeout(showToast._timer);
   showToast._timer = setTimeout(() => el.toastMsg.classList.add("hidden"), ms);
 }
 
-function speakSpanish(text, alertKey) {
+function cancelSpeech() {
+  if ("speechSynthesis" in window) {
+    try {
+      window.speechSynthesis.cancel();
+    } catch {
+      // Ignorar si no está disponible
+    }
+  }
+}
+
+function speakSpanish(text, alertKey, contextId = null) {
   if (!state.voiceEnabled || !("speechSynthesis" in window)) return;
   if (alertKey && state.spokenAlerts.has(alertKey)) return;
   if (alertKey) state.spokenAlerts.add(alertKey);
+  state.lastSpokenContextId = contextId;
   try {
     window.speechSynthesis.cancel();
     const utter = new SpeechSynthesisUtterance(text);
     utter.lang = "es-HN";
-    utter.rate = 1.05;
+    utter.rate = state.mode === "sim" && state.simSpeed > 1 ? 1.28 : 1.12;
     window.speechSynthesis.speak(utter);
   } catch {
     // Ignorar errores si el navegador bloquea autoplay de voz
@@ -491,7 +516,8 @@ function initMap() {
     style: MAP_STYLES[state.theme],
     center: [-87.185, 14.072],
     zoom: 14,
-    pitch: 58,
+    maxZoom: 21,
+    pitch: 56,
     bearing: 0,
     antialias: true
   });
@@ -507,21 +533,36 @@ function initMap() {
     state.mapReady = true;
     ensureRouteLayers();
     renderAllMapData();
+    applyRouteLineVisibility();
+  });
+
+  state.map.on("zoom", () => {
+    updateForkMarkersVisibility();
   });
 
   state.map.on("click", (e) => {
-    if (!state.pickMode) return;
-    state.pickMode = false;
-    const { lng, lat } = e.lngLat;
-    state.draftStops.push({
-      id: `custom-${Date.now()}`,
-      name: `Punto elegido (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
-      lat,
-      lng
-    });
-    el.itineraryModal.classList.remove("hidden");
-    renderDraftStopsList();
-    showToast("Parada agregada desde el mapa");
+    if (state.pickMode) {
+      state.pickMode = false;
+      const { lng, lat } = e.lngLat;
+      state.draftStops.push({
+        id: `custom-${Date.now()}`,
+        name: `Punto elegido (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
+        lat,
+        lng
+      });
+      el.itineraryModal.classList.remove("hidden");
+      renderDraftStopsList();
+      showToast("Parada agregada desde el mapa");
+      return;
+    }
+
+    if (window.innerWidth <= 768) {
+      const hitLayers = ["avoid-forks-layer", "alt-routes-layer"].filter((id) => state.map.getLayer(id));
+      const features = hitLayers.length ? state.map.queryRenderedFeatures(e.point, { layers: hitLayers }) : [];
+      if (!features.length) {
+        toggleCleanUiMode();
+      }
+    }
   });
 }
 
@@ -651,6 +692,30 @@ function ensureRouteLayers() {
         .addTo(m);
     }
   });
+
+  applyRouteLineVisibility();
+}
+
+function applyRouteLineVisibility() {
+  const m = state.map;
+  if (!m || !state.mapReady) return;
+  const vis = state.showRouteLine ? "visible" : "none";
+  for (const id of ["main-route-casing", "main-route-layer", "take-forks-layer"]) {
+    if (m.getLayer(id)) m.setLayoutProperty(id, "visibility", vis);
+  }
+}
+
+function toggleCleanUiMode(force = null) {
+  state.cleanUiMode = force !== null ? Boolean(force) : !state.cleanUiMode;
+  document.body.classList.toggle("ios-clean-mode", state.cleanUiMode);
+  if (el.btnToggleCleanUi) {
+    el.btnToggleCleanUi.classList.toggle("active", state.cleanUiMode);
+    el.btnToggleCleanUi.innerHTML = state.cleanUiMode
+      ? `<i data-lucide="minimize-2" class="ico-md"></i><span>Ver más</span>`
+      : `<i data-lucide="maximize-2" class="ico-md"></i><span>Mapa</span>`;
+    refreshLucideIcons();
+  }
+  updateNavigationHUD();
 }
 
 function emptyFC() {
@@ -722,10 +787,13 @@ function processPrimaryRoute(route) {
   state.cumDistances = cum;
 
   const flatSteps = [];
+  let searchHintMeters = 0;
   for (const leg of route.legs) {
     for (const step of leg.steps) {
       const [sLng, sLat] = step.maneuver.location;
-      const along = findNearestRouteProgress([sLng, sLat]);
+      const proj = projectOntoRoute([sLng, sLat], searchHintMeters);
+      const along = Math.max(searchHintMeters, proj.distAlong);
+      searchHintMeters = along;
       flatSteps.push({
         coord: [sLng, sLat],
         distAlong: along,
@@ -738,22 +806,87 @@ function processPrimaryRoute(route) {
   }
   state.steps = flatSteps;
 
+  state.activeCheckpoints = TEGUCIGALPA_CHECKPOINTS.map((cp) => {
+    const proj = projectOntoRoute([cp.lng, cp.lat]);
+    return { ...cp, distAlong: proj.distAlong, perpDist: proj.perpDist };
+  })
+    .filter((cp) => cp.perpDist < 220)
+    .sort((a, b) => a.distAlong - b.distAlong);
+
   el.metricTotalDist.textContent = `${(route.distance / 1000).toFixed(1)} km`;
   el.metricTotalTime.textContent = `${Math.round(route.duration / 60)} min`;
-  el.metricRoutesCount.textContent = `${state.routes.length} rutas · 5 puentes`;
+  el.metricRoutesCount.textContent = `${state.routes.length} rutas · ${state.activeCheckpoints.length} puentes`;
 }
 
-function findNearestRouteProgress(point) {
-  let bestIdx = 0;
-  let bestDist = Infinity;
-  for (let i = 0; i < state.mainCoords.length; i++) {
-    const d = haversineMeters(point, state.mainCoords[i]);
-    if (d < bestDist) {
-      bestDist = d;
-      bestIdx = i;
+function projectOntoRoute(point, hintMeters = null) {
+  const coords = state.mainCoords;
+  const cum = state.cumDistances;
+  if (!coords.length) return { distAlong: 0, perpDist: Infinity, segmentIndex: 0, heading: 0 };
+  if (coords.length === 1) {
+    return {
+      distAlong: 0,
+      perpDist: haversineMeters(point, coords[0]),
+      segmentIndex: 0,
+      heading: 0
+    };
+  }
+
+  const refLat = point[1];
+  const mPerDegLat = 111320;
+  const mPerDegLng = 111320 * Math.cos(toRad(refLat));
+
+  const px = (point[0] - coords[0][0]) * mPerDegLng;
+  const py = (point[1] - coords[0][1]) * mPerDegLat;
+
+  let bestScore = Infinity;
+  let bestPerp = Infinity;
+  let bestAlong = 0;
+  let bestSeg = 0;
+
+  for (let i = 0; i < coords.length - 1; i++) {
+    const ax = (coords[i][0] - coords[0][0]) * mPerDegLng;
+    const ay = (coords[i][1] - coords[0][1]) * mPerDegLat;
+    const bx = (coords[i + 1][0] - coords[0][0]) * mPerDegLng;
+    const by = (coords[i + 1][1] - coords[0][1]) * mPerDegLat;
+
+    const dx = bx - ax;
+    const dy = by - ay;
+    const lenSq = dx * dx + dy * dy;
+    let t = 0;
+    if (lenSq > 0.0001) {
+      t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lenSq));
+    }
+    const cx = ax + t * dx;
+    const cy = ay + t * dy;
+    const perp = Math.hypot(px - cx, py - cy);
+    const segMeters = (cum[i + 1] - cum[i]) || Math.hypot(dx, dy);
+    const candAlong = cum[i] + t * segMeters;
+
+    let score = perp;
+    if (hintMeters !== null) {
+      const jump = Math.abs(candAlong - hintMeters);
+      if (jump > 250) score += (jump - 250) * 0.25;
+      if (candAlong < hintMeters - 40) score += 35;
+    }
+
+    if (score < bestScore) {
+      bestScore = score;
+      bestPerp = perp;
+      bestAlong = candAlong;
+      bestSeg = i;
     }
   }
-  return state.cumDistances[bestIdx] || 0;
+
+  return {
+    distAlong: bestAlong,
+    perpDist: bestPerp,
+    segmentIndex: bestSeg,
+    heading: calculateBearing(coords[bestSeg], coords[bestSeg + 1])
+  };
+}
+
+function findNearestRouteProgress(point, hintMeters = null) {
+  return projectOntoRoute(point, hintMeters).distAlong;
 }
 
 /* ================= RENDER MAP LAYERS & VECTOR MARKERS ================= */
@@ -806,17 +939,21 @@ function renderAllMapData() {
     state.stopMarkers.push(mk);
   });
 
-  state.forkMarkers.forEach((mk) => mk.remove());
+  state.forkMarkers.forEach((item) => item.mk.remove());
   state.forkMarkers = [];
-  TEGUCIGALPA_CHECKPOINTS.forEach((cp) => {
+  TEGUCIGALPA_CHECKPOINTS.forEach((cp, idx) => {
     const div = document.createElement("div");
     div.className = "fork-marker";
-    div.innerHTML = `${svgIcon("alert-triangle", 11)}<span>${cp.shortLabel}</span>`;
-    div.addEventListener("click", () => jumpToCheckpoint(cp));
-    const mk = new maplibregl.Marker({ element: div, anchor: "top" })
+    div.title = cp.shortLabel;
+    div.innerHTML = `<span>${idx + 1}</span>`;
+    div.addEventListener("click", (e) => {
+      e.stopPropagation();
+      jumpToCheckpoint(cp);
+    });
+    const mk = new maplibregl.Marker({ element: div, anchor: "center" })
       .setLngLat([cp.lng, cp.lat])
       .addTo(m);
-    state.forkMarkers.push(mk);
+    state.forkMarkers.push({ mk, el: div, cp });
   });
 
   if (!state.vehicleMarker) {
@@ -827,6 +964,23 @@ function renderAllMapData() {
       .setLngLat(state.mainCoords[0])
       .addTo(m);
   }
+
+  applyRouteLineVisibility();
+  updateForkMarkersVisibility();
+}
+
+function updateForkMarkersVisibility() {
+  if (!state.map || !state.forkMarkers.length) return;
+  const zoom = state.map.getZoom();
+  const curAlong = state.mode === "sim" ? state.simDistMeters : state.lastAlongMeters;
+  const activeById = new Map(state.activeCheckpoints.map((c) => [c.id, c]));
+
+  state.forkMarkers.forEach(({ el: div, cp }) => {
+    const activeCp = activeById.get(cp.id);
+    const passed = activeCp ? activeCp.distAlong - curAlong < -35 : false;
+    const shouldHide = zoom < 12.5 || (state.camera3d && passed);
+    div.classList.toggle("is-hidden", shouldHide);
+  });
 }
 
 /* ================= VEHICLE POSITION, 3D ARROW & LANE LOGIC ================= */
@@ -865,8 +1019,14 @@ function sampleRouteAtDistance(meters) {
 
 function resetVehicleToStart() {
   state.simDistMeters = 0;
+  state.lastAlongMeters = 0;
+  state.activeCheckpointId = null;
+  state.dismissedCheckpointId = null;
+  state.bridgeAlertShownAt = 0;
+  state.lastSpokenContextId = null;
   el.simScrubber.value = "0";
   state.spokenAlerts.clear();
+  cancelSpeech();
   const sample = sampleRouteAtDistance(0);
   if (sample) {
     state.vehiclePos = sample.coord;
@@ -878,9 +1038,16 @@ function resetVehicleToStart() {
 
 function jumpToCheckpoint(cp) {
   if (state.mode === "gps") stopGpsMode();
-  const cpAlong = findNearestRouteProgress([cp.lng, cp.lat]);
+  cancelSpeech();
+  const matched = state.activeCheckpoints.find((c) => c.id === cp.id);
+  const cpAlong = matched ? matched.distAlong : projectOntoRoute([cp.lng, cp.lat]).distAlong;
   const startAlong = Math.max(0, cpAlong - 320);
   state.simDistMeters = startAlong;
+  state.lastAlongMeters = startAlong;
+  state.activeCheckpointId = null;
+  state.dismissedCheckpointId = null;
+  state.bridgeAlertShownAt = 0;
+  state.lastSpokenContextId = null;
   state.spokenAlerts.delete(`${cp.id}-far`);
   state.spokenAlerts.delete(`${cp.id}-near`);
 
@@ -896,7 +1063,7 @@ function jumpToCheckpoint(cp) {
     setCameraButtonUI(true);
     updateNavigationHUD();
     focusCameraOnVehicle(true);
-    showToast(`Probando desvío: ${cp.title}`);
+    showToast(`Probando desvío: ${cp.shortLabel}`);
   }
 }
 
@@ -905,8 +1072,8 @@ function focusCameraOnVehicle(immediate = false) {
   if (state.camera3d) {
     const opts = {
       center: state.vehiclePos,
-      zoom: 17,
-      pitch: 60,
+      zoom: 16.6,
+      pitch: 56,
       bearing: state.vehicleHeading
     };
     if (immediate) state.map.jumpTo(opts);
@@ -933,7 +1100,12 @@ function updateNavigationHUD() {
     el.simScrubber.value = String(Math.round((state.simDistMeters / totalDist) * 1000));
   }
 
-  const curAlong = state.mode === "sim" ? state.simDistMeters : findNearestRouteProgress(state.vehiclePos);
+  const curAlong =
+    state.mode === "sim"
+      ? state.simDistMeters
+      : projectOntoRoute(state.vehiclePos, state.lastAlongMeters).distAlong;
+  state.lastAlongMeters = curAlong;
+
   const lookAhead = sampleRouteAtDistance(Math.min(totalDist, curAlong + 90));
   const targetBearing = lookAhead ? calculateBearing(state.vehiclePos, lookAhead.coord) : state.vehicleHeading;
   const arrowAngle = state.camera3d
@@ -944,43 +1116,80 @@ function updateNavigationHUD() {
   el.speedBadge.textContent = `${Math.round(state.speedKmh)} km/h`;
 
   let nearestCp = null;
-  let nearestCpDist = Infinity;
-  for (const cp of TEGUCIGALPA_CHECKPOINTS) {
-    const d = haversineMeters(state.vehiclePos, [cp.lng, cp.lat]);
-    if (d < 850 && d < nearestCpDist) {
-      nearestCpDist = d;
+  let nearestCpDelta = Infinity;
+  const cpPool = state.activeCheckpoints.length ? state.activeCheckpoints : [];
+  for (const cp of cpPool) {
+    const delta = cp.distAlong - curAlong;
+    if (delta >= -10 && delta <= 550 && delta < nearestCpDelta) {
+      nearestCpDelta = delta;
       nearestCp = cp;
     }
   }
 
-  const nextStep = state.steps.find((st) => st.distAlong > curAlong + 15) || state.steps[state.steps.length - 1];
+  if (state.lastSpokenContextId && (!nearestCp || nearestCp.id !== state.lastSpokenContextId)) {
+    cancelSpeech();
+    state.lastSpokenContextId = null;
+  }
+
+  const nextStep = state.steps.find((st) => st.distAlong > curAlong + 8) || state.steps[state.steps.length - 1];
   const nextStepDist = nextStep ? Math.max(0, nextStep.distAlong - curAlong) : 0;
 
+  const speedMps = Math.max(8, (state.speedKmh || 50) / 3.6);
+  const showLanes = !state.cleanUiMode && (Boolean(nearestCp) || nextStepDist <= 350);
+  el.laneForkBar.classList.toggle("hidden", !showLanes);
+
   if (nearestCp) {
+    if (state.activeCheckpointId !== nearestCp.id) {
+      state.activeCheckpointId = nearestCp.id;
+      state.bridgeAlertShownAt = performance.now();
+    }
+    const alertExpired = performance.now() - state.bridgeAlertShownAt > 5000;
+    const showBridgeBanner =
+      !state.cleanUiMode &&
+      state.dismissedCheckpointId !== nearestCp.id &&
+      !alertExpired &&
+      nearestCpDelta > 25;
+
+    const dispDist = Math.max(0, nearestCpDelta);
     el.hudCard.classList.add("checkpoint-active");
     el.checkpointBadge.classList.remove("hidden");
-    el.bridgeAlert.classList.remove("hidden");
-    el.hudDistance.textContent = formatDistance(nearestCpDist);
+    el.bridgeAlert.classList.toggle("hidden", !showBridgeBanner);
+    el.hudDistance.textContent = formatDistance(dispDist);
     el.hudTitle.textContent = nearestCp.actionHeadline;
-    el.hudSubtitle.textContent = nearestCp.title;
+    el.hudSubtitle.textContent = state.showRouteLine
+      ? nearestCp.title
+      : "Línea verde oculta · Carretera despejada";
 
-    el.bridgeAlertTitle.textContent = nearestCp.title;
-    el.bridgeAlertDist.textContent = `a ${formatDistance(nearestCpDist)}`;
-    el.bridgePathsGrid.innerHTML = nearestCp.paths
-      .map((p) => {
-        const icon = p.type === "take" ? svgIcon("check", 13) : svgIcon("ban", 13);
-        return `<div class="bridge-path-item ${p.type}">${icon}<span>${p.label}</span></div>`;
-      })
-      .join("");
+    if (showBridgeBanner) {
+      el.bridgeAlertTitle.textContent = nearestCp.title;
+      el.bridgeAlertDist.textContent = `a ${formatDistance(dispDist)}`;
+      el.bridgePathsGrid.innerHTML = nearestCp.paths
+        .map((p) => {
+          const icon = p.type === "take" ? svgIcon("check", 13) : svgIcon("ban", 13);
+          return `<div class="bridge-path-item ${p.type}">${icon}<span>${p.label}</span></div>`;
+        })
+        .join("");
+    }
 
     highlightLanes(nearestCp.takeLane, true);
 
-    if (nearestCpDist <= 500 && nearestCpDist > 220) {
-      speakSpanish(nearestCp.voiceAlert, `${nearestCp.id}-far`);
-    } else if (nearestCpDist <= 200) {
-      speakSpanish(`A ${Math.round(nearestCpDist)} metros: ${nearestCp.actionHeadline}`, `${nearestCp.id}-near`);
+    const farTrigger = Math.min(450, Math.max(200, speedMps * 7.5));
+    const nearTrigger = Math.min(140, Math.max(55, speedMps * 3));
+    if (nearestCpDelta <= farTrigger && nearestCpDelta > nearTrigger) {
+      speakSpanish(
+        `${nearestCp.shortLabel}: ${nearestCp.actionHeadline}`,
+        `${nearestCp.id}-far`,
+        nearestCp.id
+      );
+    } else if (nearestCpDelta <= nearTrigger && nearestCpDelta > 10) {
+      speakSpanish(
+        `En ${Math.round(nearestCpDelta)} metros, ${nearestCp.actionHeadline}`,
+        `${nearestCp.id}-near`,
+        nearestCp.id
+      );
     }
   } else {
+    state.activeCheckpointId = null;
     el.hudCard.classList.remove("checkpoint-active");
     el.checkpointBadge.classList.add("hidden");
     el.bridgeAlert.classList.add("hidden");
@@ -988,9 +1197,23 @@ function updateNavigationHUD() {
     el.hudDistance.textContent = formatDistance(nextStepDist);
     const { lane, label } = mapModifierToSpanish(nextStep);
     el.hudTitle.textContent = label;
-    el.hudSubtitle.textContent = nextStep?.name ? `Vía: ${nextStep.name}` : "Mantente en la ruta verde";
+    el.hudSubtitle.textContent = state.showRouteLine
+      ? nextStep?.name
+        ? `Vía: ${nextStep.name}`
+        : "Mantente en la ruta verde"
+      : "Línea verde oculta · Carretera despejada";
     highlightLanes(lane, false);
+
+    const turnTrigger = Math.max(90, speedMps * 4);
+    const isTurnOrArrive =
+      nextStep &&
+      (nextStep.type === "arrive" || (nextStep.modifier && !nextStep.modifier.includes("straight")));
+    if (isTurnOrArrive && nextStepDist <= turnTrigger && nextStepDist > 12) {
+      speakSpanish(label, `step-${Math.round(nextStep.distAlong)}`);
+    }
   }
+
+  updateForkMarkersVisibility();
 }
 
 function mapModifierToSpanish(step) {
@@ -1254,6 +1477,7 @@ function bindEvents() {
     if (state.mode === "gps") stopGpsMode();
     state.simPlaying = !state.simPlaying;
     setPlayButtonUI(state.simPlaying);
+    if (!state.simPlaying) cancelSpeech();
   });
 
   el.btnSimSpeed.addEventListener("click", () => {
@@ -1265,8 +1489,11 @@ function bindEvents() {
 
   el.simScrubber.addEventListener("input", () => {
     if (state.mode === "gps") stopGpsMode();
+    cancelSpeech();
+    state.spokenAlerts.clear();
     const totalDist = state.cumDistances[state.cumDistances.length - 1] || 0;
     state.simDistMeters = (Number(el.simScrubber.value) / 1000) * totalDist;
+    state.lastAlongMeters = state.simDistMeters;
     const sample = sampleRouteAtDistance(state.simDistMeters);
     if (sample) {
       state.vehiclePos = sample.coord;
@@ -1299,6 +1526,37 @@ function bindEvents() {
     state.map.setStyle(MAP_STYLES[state.theme]);
   });
 
+  el.btnToggleRouteLine.addEventListener("click", () => {
+    state.showRouteLine = !state.showRouteLine;
+    el.btnToggleRouteLine.classList.toggle("active", state.showRouteLine);
+    el.btnToggleRouteLine.innerHTML = state.showRouteLine
+      ? `<i data-lucide="route" class="ico-md"></i><span>Guía</span>`
+      : `<i data-lucide="eye-off" class="ico-md"></i><span>Sin línea</span>`;
+    refreshLucideIcons();
+    applyRouteLineVisibility();
+    updateNavigationHUD();
+    showToast(state.showRouteLine ? "Línea verde visible" : "Línea verde oculta · Carretera libre");
+  });
+
+  el.btnToggleCleanUi.addEventListener("click", () => {
+    toggleCleanUiMode();
+  });
+
+  el.btnDismissBridgeAlert.addEventListener("click", () => {
+    if (state.activeCheckpointId) {
+      state.dismissedCheckpointId = state.activeCheckpointId;
+    }
+    el.bridgeAlert.classList.add("hidden");
+  });
+
+  el.btnZoomIn.addEventListener("click", () => {
+    if (state.map) state.map.zoomIn({ duration: 220 });
+  });
+
+  el.btnZoomOut.addEventListener("click", () => {
+    if (state.map) state.map.zoomOut({ duration: 220 });
+  });
+
   el.btnToggleVoice.addEventListener("click", () => {
     state.voiceEnabled = !state.voiceEnabled;
     el.btnToggleVoice.classList.toggle("active", state.voiceEnabled);
@@ -1306,7 +1564,8 @@ function bindEvents() {
       ? `<i data-lucide="volume-2" class="ico-md"></i><span>Voz</span>`
       : `<i data-lucide="volume-x" class="ico-md"></i><span>Muda</span>`;
     refreshLucideIcons();
-    if (state.voiceEnabled) speakSpanish("Alertas de puentes por voz activadas.");
+    if (state.voiceEnabled) speakSpanish("Voz activada.");
+    else cancelSpeech();
   });
 
   el.btnToggleItinerary.addEventListener("click", openItineraryModal);
