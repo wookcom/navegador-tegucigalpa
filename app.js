@@ -59,14 +59,17 @@ const SATELLITE_HYBRID_STYLE = {
   version: 8,
   glyphs: "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
   sources: {
-    "esri-satellite": {
+    "google-satellite-4k": {
       type: "raster",
       tiles: [
-        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+        "https://mt0.google.com/vt/lyrs=s&hl=es&x={x}&y={y}&z={z}",
+        "https://mt1.google.com/vt/lyrs=s&hl=es&x={x}&y={y}&z={z}",
+        "https://mt2.google.com/vt/lyrs=s&hl=es&x={x}&y={y}&z={z}",
+        "https://mt3.google.com/vt/lyrs=s&hl=es&x={x}&y={y}&z={z}"
       ],
       tileSize: 256,
-      maxzoom: 18,
-      attribution: "Esri, Maxar, Earthstar Geographics"
+      maxzoom: 20,
+      attribution: "Google Satellite 4K · OpenMapTiles"
     },
     openmaptiles: {
       type: "vector",
@@ -75,14 +78,42 @@ const SATELLITE_HYBRID_STYLE = {
   },
   layers: [
     {
-      id: "esri-sat-base",
+      id: "google-sat-4k-base",
       type: "raster",
-      source: "esri-satellite",
+      source: "google-satellite-4k",
       paint: {
-        "raster-contrast": 0.16,
-        "raster-saturation": 0.1,
+        "raster-contrast": 0.14,
+        "raster-saturation": 0.12,
         "raster-brightness-min": 0.02,
         "raster-fade-duration": 0
+      }
+    },
+    {
+      id: "road-asphalt-casing",
+      type: "line",
+      source: "openmaptiles",
+      "source-layer": "transportation",
+      minzoom: 15.5,
+      filter: ["in", ["get", "class"], ["literal", ["motorway", "trunk", "primary", "secondary", "tertiary", "minor"]]],
+      layout: { "line-join": "round", "line-cap": "round" },
+      paint: {
+        "line-color": "#090d14",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 15.5, 4, 19, 18],
+        "line-opacity": 0.32
+      }
+    },
+    {
+      id: "road-asphalt-surface",
+      type: "line",
+      source: "openmaptiles",
+      "source-layer": "transportation",
+      minzoom: 15.5,
+      filter: ["in", ["get", "class"], ["literal", ["motorway", "trunk", "primary", "secondary", "tertiary", "minor"]]],
+      layout: { "line-join": "round", "line-cap": "round" },
+      paint: {
+        "line-color": "#1e2430",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 15.5, 2.5, 19, 14],
+        "line-opacity": 0.2
       }
     },
     {
@@ -90,26 +121,28 @@ const SATELLITE_HYBRID_STYLE = {
       type: "fill-extrusion",
       source: "openmaptiles",
       "source-layer": "building",
-      minzoom: 13.2,
+      minzoom: 12.5,
       filter: ["!", ["has", "hide_3d"]],
       paint: {
         "fill-extrusion-color": [
           "interpolate",
           ["linear"],
-          ["coalesce", ["get", "render_height"], 10],
-          0, "#e2e8f0",
+          ["coalesce", ["get", "render_height"], 7],
+          0, "#d97757",
+          8, "#e7d8c5",
           16, "#cbd5e1",
-          42, "#94a3b8"
+          36, "#94a3b8"
         ],
         "fill-extrusion-height": [
           "interpolate",
           ["linear"],
           ["zoom"],
-          13.2, 0,
-          14.4, ["coalesce", ["*", ["get", "render_height"], 1.35], 11]
+          12.5, 0,
+          14.0, ["max", 6.5, ["*", ["coalesce", ["get", "render_height"], 6.5], 1.45]]
         ],
         "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
-        "fill-extrusion-opacity": 0.82
+        "fill-extrusion-vertical-gradient": true,
+        "fill-extrusion-opacity": 0.88
       }
     },
     {
@@ -117,17 +150,17 @@ const SATELLITE_HYBRID_STYLE = {
       type: "symbol",
       source: "openmaptiles",
       "source-layer": "transportation_name",
-      minzoom: 13,
+      minzoom: 13.5,
       layout: {
         "symbol-placement": "line",
         "text-field": ["coalesce", ["get", "name"], ["get", "ref"], ""],
         "text-font": ["Noto Sans Regular"],
-        "text-size": ["interpolate", ["linear"], ["zoom"], 13, 11, 18, 15],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 13.5, 10.5, 18.5, 14],
         "text-rotation-alignment": "map"
       },
       paint: {
         "text-color": "#ffffff",
-        "text-halo-color": "rgba(8, 12, 20, 0.92)",
+        "text-halo-color": "rgba(8, 12, 20, 0.94)",
         "text-halo-width": 1.8
       }
     },
@@ -136,15 +169,15 @@ const SATELLITE_HYBRID_STYLE = {
       type: "symbol",
       source: "openmaptiles",
       "source-layer": "place",
-      minzoom: 11,
+      minzoom: 11.5,
       layout: {
         "text-field": ["coalesce", ["get", "name"], ""],
         "text-font": ["Noto Sans Regular"],
-        "text-size": ["interpolate", ["linear"], ["zoom"], 11, 12, 16, 15]
+        "text-size": ["interpolate", ["linear"], ["zoom"], 11.5, 11.5, 16, 14]
       },
       paint: {
         "text-color": "#f8fafc",
-        "text-halo-color": "rgba(8, 12, 20, 0.92)",
+        "text-halo-color": "rgba(8, 12, 20, 0.94)",
         "text-halo-width": 2
       }
     }
@@ -245,6 +278,7 @@ const state = {
   dynamicAvoidFeatures: [],
   dynamicLoopFeatures: [],
   routeArrowFeatures: [],
+  proceduralHouseFeatures: [],
   totalDistance: 0,
   totalDuration: 0,
 
@@ -256,13 +290,15 @@ const state = {
   lastAlongMeters: 0,
   vehiclePos: null,
   vehicleHeading: 0,
+  smoothCameraBearing: 0,
+  bankAngleDeg: 0,
   deviceHeading: null,
   speedKmh: 0,
   gpsWatchId: null,
   lastFrameTime: 0,
 
   cameraMode: "street",
-  followZoom: 18.8,
+  followZoom: 19.1,
   theme: "satellite",
   showRouteLine: true,
   cleanUiMode: false,
@@ -294,6 +330,8 @@ const el = {
   checkpointBadge: document.getElementById("checkpointBadge"),
   curveSpeedBadge: document.getElementById("curveSpeedBadge"),
   speedBadge: document.getElementById("speedBadge"),
+  gearBadge: document.getElementById("gearBadge"),
+  rpmBarFill: document.getElementById("rpmBarFill"),
   hudTitle: document.getElementById("hudTitle"),
   hudSubtitle: document.getElementById("hudSubtitle"),
   laneForkBar: document.getElementById("laneForkBar"),
@@ -304,7 +342,6 @@ const el = {
   bridgePathsGrid: document.getElementById("bridgePathsGrid"),
   btnDismissBridgeAlert: document.getElementById("btnDismissBridgeAlert"),
 
-  checkpointStrip: document.getElementById("checkpointStrip"),
   legFilterPills: document.getElementById("legFilterPills"),
   metricTotalDist: document.getElementById("metricTotalDist"),
   metricTotalTime: document.getElementById("metricTotalTime"),
@@ -409,11 +446,9 @@ function escapeHtml(str) {
     .replace(/"/g, "&quot;");
 }
 
-function showToast(msg, ms = 2600) {
-  el.toastMsg.textContent = msg;
-  el.toastMsg.classList.remove("hidden");
-  clearTimeout(showToast._timer);
-  showToast._timer = setTimeout(() => el.toastMsg.classList.add("hidden"), ms);
+function showToast() {
+  // Notificaciones flotantes deshabilitadas para vista limpia sin distracciones
+  if (el.toastMsg) el.toastMsg.classList.add("hidden");
 }
 
 /* ================= SQLITE WASM DATABASE ENGINE ================= */
@@ -937,19 +972,56 @@ function ensureChevronImage(map) {
   map.addImage("route-chevron", { width: size, height: size, data: imgData.data });
 }
 
+function ensureFacadeTexture(map) {
+  if (!map || map.hasImage("building-facade-tex")) return;
+  const size = 64;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  // Base translúcida arquitectónica con losas de entrepiso y ventanales realistas
+  ctx.fillStyle = "rgba(30, 41, 59, 0.25)";
+  ctx.fillRect(0, 0, size, size);
+
+  const cols = 4;
+  const rows = 4;
+  const cellW = size / cols;
+  const cellH = size / rows;
+
+  for (let r = 0; r < rows; r++) {
+    // Losa de concreto horizontal entre pisos
+    ctx.fillStyle = "rgba(226, 232, 240, 0.35)";
+    ctx.fillRect(0, r * cellH, size, 2);
+
+    for (let c = 0; c < cols; c++) {
+      const warm = (r + c) % 3 === 0;
+      ctx.fillStyle = warm ? "rgba(253, 224, 140, 0.65)" : "rgba(147, 197, 253, 0.52)";
+      ctx.fillRect(c * cellW + 3, r * cellH + 4, cellW - 6, cellH - 7);
+      ctx.strokeStyle = "rgba(15, 23, 42, 0.55)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(c * cellW + 3, r * cellH + 4, cellW - 6, cellH - 7);
+    }
+  }
+
+  const imgData = ctx.getImageData(0, 0, size, size);
+  map.addImage("building-facade-tex", { width: size, height: size, data: imgData.data });
+}
+
 function initMap() {
   let fallbackApplied = false;
   state.map = new maplibregl.Map({
     container: "map",
     style: MAP_STYLES[state.theme],
     center: [-87.185, 14.072],
-    zoom: 18.8,
+    zoom: 19.1,
     maxZoom: 21,
-    pitch: 74,
+    pitch: 76,
     maxPitch: 82,
     bearing: 0,
     fadeDuration: 0,
-    pixelRatio: Math.min(window.devicePixelRatio || 1, 2) * 1.25,
+    pixelRatio: Math.min((window.devicePixelRatio || 1) * 1.35, 3),
     antialias: true
   });
 
@@ -962,15 +1034,27 @@ function initMap() {
 
   state.map.on("style.load", () => {
     state.mapReady = true;
+    if (typeof state.map.setLight === "function") {
+      try {
+        state.map.setLight({
+          anchor: "map",
+          color: "#fffaf0",
+          intensity: 0.68,
+          position: [1.4, 210, 36]
+        });
+      } catch {
+        // Luz direccional opcional
+      }
+    }
     if (state.theme === "satellite" && typeof state.map.setSky === "function") {
       try {
         state.map.setSky({
-          "sky-color": "#1a365d",
+          "sky-color": "#142c4c",
           "sky-horizon-blend": 0.45,
           "horizon-color": "#93c5fd",
-          "horizon-fog-blend": 0.6,
+          "horizon-fog-blend": 0.62,
           "fog-color": "#cbd5e1",
-          "fog-ground-blend": 0.3
+          "fog-ground-blend": 0.35
         });
       } catch {
         // Sky opcional según soporte WebGL/MapLibre
@@ -979,10 +1063,6 @@ function initMap() {
     ensureRouteLayers();
     renderAllMapData();
     applyRouteLineVisibility();
-  });
-
-  state.map.on("zoom", () => {
-    updateForkMarkersVisibility();
   });
 
   state.map.on("zoomend", (e) => {
@@ -1003,16 +1083,11 @@ function initMap() {
       });
       el.itineraryModal.classList.remove("hidden");
       renderDraftStopsList();
-      showToast("Parada agregada desde el mapa");
       return;
     }
 
     if (window.innerWidth <= 768) {
-      const hitLayers = ["avoid-forks-layer", "alt-routes-layer"].filter((id) => state.map.getLayer(id));
-      const features = hitLayers.length ? state.map.queryRenderedFeatures(e.point, { layers: hitLayers }) : [];
-      if (!features.length) {
-        toggleCleanUiMode();
-      }
+      toggleCleanUiMode();
     }
   });
 }
@@ -1022,38 +1097,10 @@ function ensureRouteLayers() {
   if (!m) return;
 
   ensureChevronImage(m);
-
-  if (m.getSource("openmaptiles") && !m.getLayer("buildings-3d") && !m.getLayer("building-3d")) {
-    m.addLayer({
-      id: "buildings-3d",
-      type: "fill-extrusion",
-      source: "openmaptiles",
-      "source-layer": "building",
-      minzoom: 13.2,
-      filter: ["!", ["has", "hide_3d"]],
-      paint: {
-        "fill-extrusion-color": [
-          "interpolate",
-          ["linear"],
-          ["coalesce", ["get", "render_height"], 10],
-          0, "#e2e8f0",
-          16, "#cbd5e1",
-          42, "#94a3b8"
-        ],
-        "fill-extrusion-height": [
-          "interpolate",
-          ["linear"],
-          ["zoom"],
-          13.2, 0,
-          14.4, ["coalesce", ["*", ["get", "render_height"], 1.35], 11]
-        ],
-        "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
-        "fill-extrusion-opacity": 0.82
-      }
-    });
-  }
+  ensureFacadeTexture(m);
 
   const sources = {
+    "procedural-houses-src": { type: "geojson", data: emptyFC() },
     "alt-routes-src": { type: "geojson", data: emptyFC() },
     "avoid-forks-src": { type: "geojson", data: emptyFC() },
     "main-route-src": { type: "geojson", data: emptyFC() },
@@ -1065,6 +1112,114 @@ function ensureRouteLayers() {
     if (!m.getSource(id)) m.addSource(id, spec);
   }
 
+  // Casas y edificios 3D procedurales con textura a lo largo de la calle
+  if (!m.getLayer("procedural-houses-3d")) {
+    m.addLayer({
+      id: "procedural-houses-3d",
+      type: "fill-extrusion",
+      source: "procedural-houses-src",
+      minzoom: 14.5,
+      paint: {
+        "fill-extrusion-color": ["get", "color"],
+        "fill-extrusion-height": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          14.5, 0,
+          15.5, ["get", "height"]
+        ],
+        "fill-extrusion-base": 0,
+        "fill-extrusion-vertical-gradient": true,
+        "fill-extrusion-opacity": 0.9
+      }
+    });
+  }
+
+  if (!m.getLayer("procedural-houses-tex")) {
+    try {
+      m.addLayer({
+        id: "procedural-houses-tex",
+        type: "fill-extrusion",
+        source: "procedural-houses-src",
+        minzoom: 15.2,
+        paint: {
+          "fill-extrusion-pattern": "building-facade-tex",
+          "fill-extrusion-height": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            15.2, 0,
+            15.8, ["get", "height"]
+          ],
+          "fill-extrusion-base": 0,
+          "fill-extrusion-opacity": 0.42
+        }
+      });
+    } catch {
+      // Patrón opcional según soporte WebGL
+    }
+  }
+
+  // Edificios reales OSM en estilos claro/oscuro/satélite + capa de ventanas texturizadas
+  if (m.getSource("openmaptiles") && !m.getLayer("buildings-3d") && !m.getLayer("building-3d")) {
+    m.addLayer({
+      id: "buildings-3d",
+      type: "fill-extrusion",
+      source: "openmaptiles",
+      "source-layer": "building",
+      minzoom: 12.5,
+      filter: ["!", ["has", "hide_3d"]],
+      paint: {
+        "fill-extrusion-color": [
+          "interpolate",
+          ["linear"],
+          ["coalesce", ["get", "render_height"], 7],
+          0, "#d97757",
+          8, "#e7d8c5",
+          16, "#cbd5e1",
+          36, "#94a3b8"
+        ],
+        "fill-extrusion-height": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          12.5, 0,
+          14.0, ["max", 6.5, ["*", ["coalesce", ["get", "render_height"], 6.5], 1.45]]
+        ],
+        "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
+        "fill-extrusion-vertical-gradient": true,
+        "fill-extrusion-opacity": 0.88
+      }
+    });
+  }
+
+  if (m.getSource("openmaptiles") && !m.getLayer("buildings-3d-tex")) {
+    try {
+      m.addLayer({
+        id: "buildings-3d-tex",
+        type: "fill-extrusion",
+        source: "openmaptiles",
+        "source-layer": "building",
+        minzoom: 14.8,
+        filter: ["!", ["has", "hide_3d"]],
+        paint: {
+          "fill-extrusion-pattern": "building-facade-tex",
+          "fill-extrusion-height": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            14.8, 0,
+            15.6, ["max", 6.6, ["*", ["coalesce", ["get", "render_height"], 6.5], 1.45]]
+          ],
+          "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
+          "fill-extrusion-opacity": 0.36
+        }
+      });
+    } catch {
+      // Patrón opcional según soporte WebGL
+    }
+  }
+
   if (!m.getLayer("alt-routes-layer")) {
     m.addLayer({
       id: "alt-routes-layer",
@@ -1073,8 +1228,8 @@ function ensureRouteLayers() {
       layout: { "line-join": "round", "line-cap": "round" },
       paint: {
         "line-color": "#ff9f0a",
-        "line-width": 5,
-        "line-opacity": 0.82,
+        "line-width": 4.5,
+        "line-opacity": 0.72,
         "line-dasharray": [2, 1.5]
       }
     });
@@ -1088,8 +1243,8 @@ function ensureRouteLayers() {
       layout: { "line-join": "round", "line-cap": "round" },
       paint: {
         "line-color": "#1a0608",
-        "line-width": 9,
-        "line-opacity": 0.65
+        "line-width": 8.5,
+        "line-opacity": 0.6
       }
     });
   }
@@ -1102,8 +1257,8 @@ function ensureRouteLayers() {
       layout: { "line-join": "round", "line-cap": "round" },
       paint: {
         "line-color": "#ff453a",
-        "line-width": 5.5,
-        "line-opacity": 0.95,
+        "line-width": 5,
+        "line-opacity": 0.92,
         "line-dasharray": [1.5, 1.2]
       }
     });
@@ -1116,10 +1271,10 @@ function ensureRouteLayers() {
       source: "main-route-src",
       layout: { "line-join": "round", "line-cap": "round" },
       paint: {
-        "line-color": "#03180b",
-        "line-width": 14,
-        "line-opacity": 0.58,
-        "line-blur": 2.2
+        "line-color": "#022c16",
+        "line-width": 15,
+        "line-opacity": 0.65,
+        "line-blur": 2.4
       }
     });
   }
@@ -1133,7 +1288,7 @@ function ensureRouteLayers() {
       paint: {
         "line-color": "#ffffff",
         "line-width": 9.5,
-        "line-opacity": 0.92
+        "line-opacity": 0.94
       }
     });
   }
@@ -1145,9 +1300,24 @@ function ensureRouteLayers() {
       source: "main-route-src",
       layout: { "line-join": "round", "line-cap": "round" },
       paint: {
-        "line-color": "#30d158",
+        "line-color": "#00e676",
         "line-width": 6,
         "line-opacity": 1
+      }
+    });
+  }
+
+  if (!m.getLayer("loop-highlight-halo")) {
+    m.addLayer({
+      id: "loop-highlight-halo",
+      type: "line",
+      source: "loop-highlight-src",
+      layout: { "line-join": "round", "line-cap": "round" },
+      paint: {
+        "line-color": "#ff9f0a",
+        "line-width": 10.5,
+        "line-opacity": 0.6,
+        "line-blur": 1.8
       }
     });
   }
@@ -1159,9 +1329,9 @@ function ensureRouteLayers() {
       source: "loop-highlight-src",
       layout: { "line-join": "round", "line-cap": "round" },
       paint: {
-        "line-color": "#5efce8",
-        "line-width": 4.2,
-        "line-opacity": 0.96
+        "line-color": "#ff3b30",
+        "line-width": 6.2,
+        "line-opacity": 0.98
       }
     });
   }
@@ -1184,29 +1354,6 @@ function ensureRouteLayers() {
     });
   }
 
-  if (!m._navTguClickBound) {
-    m._navTguClickBound = true;
-    m.on("click", "avoid-forks-layer", (e) => {
-      const label = e.features?.[0]?.properties?.label;
-      if (label) {
-        new maplibregl.Popup()
-          .setLngLat(e.lngLat)
-          .setHTML(`<strong style="color:#ff453a">${escapeHtml(label)}</strong>`)
-          .addTo(m);
-      }
-    });
-
-    m.on("click", "alt-routes-layer", (e) => {
-      const label = e.features?.[0]?.properties?.label;
-      if (label) {
-        new maplibregl.Popup()
-          .setLngLat(e.lngLat)
-          .setHTML(`<strong style="color:#ff9f0a">${escapeHtml(label)}</strong>`)
-          .addTo(m);
-      }
-    });
-  }
-
   applyRouteLineVisibility();
 }
 
@@ -1218,6 +1365,7 @@ function applyRouteLineVisibility() {
     "main-route-glow",
     "main-route-casing",
     "main-route-layer",
+    "loop-highlight-halo",
     "loop-highlight-layer",
     "route-arrows-layer"
   ]) {
@@ -1234,8 +1382,8 @@ function toggleCleanUiMode(force = null) {
   if (el.btnToggleCleanUi) {
     el.btnToggleCleanUi.classList.toggle("active", state.cleanUiMode);
     el.btnToggleCleanUi.innerHTML = state.cleanUiMode
-      ? `<i data-lucide="eye" class="ico-md"></i><span>Mostrar</span>`
-      : `<i data-lucide="eye-off" class="ico-md"></i><span>Ocultar</span>`;
+      ? `<i data-lucide="eye" class="ico-md"></i>`
+      : `<i data-lucide="eye-off" class="ico-md"></i>`;
     refreshLucideIcons();
   }
   updateNavigationHUD();
@@ -1654,7 +1802,7 @@ function buildRouteArrowChevrons(coords, cum) {
         cursor >= c.distAlong - 20 &&
         cursor <= (c.endDistAlong || c.distAlong + 30) + 15
     );
-    const stepM = insideTight ? 24 : 90;
+    const stepM = insideTight ? 20 : 85;
     const sample = sampleRouteAtDistance(cursor);
     if (sample) {
       features.push({
@@ -1665,6 +1813,134 @@ function buildRouteArrowChevrons(coords, cum) {
     }
     cursor += stepM;
   }
+  return features;
+}
+
+function buildProcedural3dHouses(coords, cum) {
+  const features = [];
+  const maxD = cum[cum.length - 1] || 0;
+  if (coords.length < 2 || maxD < 60) return features;
+
+  const stopCoords = (state.stops || [])
+    .map((s) => s?.coord || (Number.isFinite(s?.lng) && Number.isFinite(s?.lat) ? [s.lng, s.lat] : null))
+    .filter(Boolean);
+
+  // Subsample long straight segments so cloverleafs, ramps, and parallel roads keep >= 15 m clearance
+  const checkPts = [];
+  for (let i = 0; i < coords.length; i++) {
+    const a = coords[i];
+    checkPts.push(a);
+    if (i + 1 < coords.length) {
+      const b = coords[i + 1];
+      const segM = haversineMeters(a, b);
+      if (segM > 14) {
+        const parts = Math.min(20, Math.floor(segM / 12));
+        for (let k = 1; k < parts; k++) {
+          const t = k / parts;
+          checkPts.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+        }
+      }
+    }
+  }
+
+  const palette = [
+    "#d6cfc2",
+    "#cbd5e1",
+    "#bfa893",
+    "#94a3b8",
+    "#c9b9a6",
+    "#a8b5c2",
+    "#b89f8d",
+    "#adb5bd"
+  ];
+
+  const seeded = (n) => {
+    const x = Math.sin(n * 12.9898 + 78.233) * 43758.5453;
+    return x - Math.floor(x);
+  };
+
+  const hasClearance = (pt, minMeters) => {
+    const lngTol = 0.00024;
+    const latTol = 0.00024;
+    for (let i = 0; i < checkPts.length; i++) {
+      const p = checkPts[i];
+      if (Math.abs(pt[0] - p[0]) > lngTol || Math.abs(pt[1] - p[1]) > latTol) continue;
+      if (haversineMeters(pt, p) < minMeters) return false;
+    }
+    return true;
+  };
+
+  const isInUrbanCorridor = (distM, coord) => {
+    if (distM <= 3000 || distM >= Math.max(0, maxD - 22000)) return true;
+    for (let i = 0; i < stopCoords.length; i++) {
+      const s = stopCoords[i];
+      if (Math.abs(coord[0] - s[0]) < 0.028 && Math.abs(coord[1] - s[1]) < 0.028) {
+        if (haversineMeters(coord, s) <= 2400) return true;
+      }
+    }
+    return false;
+  };
+
+  let idxSeed = 1;
+  let cursor = 25;
+  while (cursor < maxD - 25 && features.length < 550) {
+    const sample = sampleRouteAtDistance(cursor);
+    if (!sample) {
+      cursor += 40;
+      continue;
+    }
+
+    if (!isInUrbanCorridor(cursor, sample.coord)) {
+      cursor += 120;
+      idxSeed += 1;
+      continue;
+    }
+
+    for (const side of [-1, 1]) {
+      if (features.length >= 550) break;
+      idxSeed += 1;
+      const r1 = seeded(idxSeed * 3 + side);
+      const r2 = seeded(idxSeed * 5 + 11);
+      const r3 = seeded(idxSeed * 7 + 19);
+
+      if (r1 < 0.12) continue; // occasional yard/gap between buildings
+
+      const offsetM = 17 + r2 * 9; // 17 m to 26 m off centerline
+      const center = projectPointMeters(sample.coord, sample.heading + side * 90, offsetM);
+      if (!hasClearance(center, 15.0)) continue;
+
+      const isTall = r3 > 0.72;
+      const halfAlongM = isTall ? 5.5 + r1 * 3.5 : 4.0 + r1 * 2.8;
+      const halfAcrossM = isTall ? 4.2 + r2 * 2.5 : 3.2 + r2 * 1.8;
+      const height = isTall ? 12.0 + r3 * 10.0 : 6.0 + r3 * 5.8; // 6.0..22.0 m
+      const color = palette[Math.floor((r1 + r2 + r3) * 100) % palette.length];
+
+      const fwd = sample.heading;
+      const right = sample.heading + 90;
+      const fCenter = projectPointMeters(center, fwd, halfAlongM);
+      const bCenter = projectPointMeters(center, fwd + 180, halfAlongM);
+      const c1 = projectPointMeters(fCenter, right + 180, halfAcrossM);
+      const c2 = projectPointMeters(fCenter, right, halfAcrossM);
+      const c3 = projectPointMeters(bCenter, right, halfAcrossM);
+      const c4 = projectPointMeters(bCenter, right + 180, halfAcrossM);
+
+      features.push({
+        type: "Feature",
+        properties: {
+          height: Number(height.toFixed(1)),
+          base: 0,
+          color
+        },
+        geometry: {
+          type: "Polygon",
+          coordinates: [[c1, c2, c3, c4, c1]]
+        }
+      });
+    }
+
+    cursor += 30;
+  }
+
   return features;
 }
 
@@ -1705,12 +1981,11 @@ function processPrimaryRoute(route) {
 
   analyzeRouteGeometryAndManeuvers(route, coords, cum, flatSteps);
   state.routeArrowFeatures = buildRouteArrowChevrons(coords, cum);
+  state.proceduralHouseFeatures = buildProcedural3dHouses(coords, cum);
 
   el.metricTotalDist.textContent = `${(route.distance / 1000).toFixed(1)} km`;
   el.metricTotalTime.textContent = `${Math.round(route.duration / 60)} min`;
   el.metricRoutesCount.textContent = `${state.routes.length} rutas · ${state.activeCheckpoints.length} alertas`;
-
-  renderCheckpointStrip();
 }
 
 function projectOntoRoute(point, hintMeters = null) {
@@ -1801,6 +2076,10 @@ function renderAllMapData() {
   m.getSource("avoid-forks-src")?.setData({ type: "FeatureCollection", features: state.dynamicAvoidFeatures });
   m.getSource("loop-highlight-src")?.setData({ type: "FeatureCollection", features: state.dynamicLoopFeatures });
   m.getSource("route-arrows-src")?.setData({ type: "FeatureCollection", features: state.routeArrowFeatures });
+  m.getSource("procedural-houses-src")?.setData({
+    type: "FeatureCollection",
+    features: state.proceduralHouseFeatures || []
+  });
 
   state.stopMarkers.forEach((mk) => mk.remove());
   state.stopMarkers = [];
@@ -1819,26 +2098,6 @@ function renderAllMapData() {
 
   state.forkMarkers.forEach((item) => item.mk.remove());
   state.forkMarkers = [];
-  state.activeCheckpoints.forEach((cp, idx) => {
-    const div = document.createElement("div");
-    const extraCls =
-      cp.kind === "loop270" || cp.kind === "hairpin"
-        ? "loop-marker"
-        : cp.kind === "roundabout"
-        ? "roundabout-marker"
-        : "";
-    div.className = `fork-marker ${extraCls}`.trim();
-    div.title = cp.title;
-    div.innerHTML = `<span>${idx + 1}</span>`;
-    div.addEventListener("click", (e) => {
-      e.stopPropagation();
-      jumpToCheckpoint(cp);
-    });
-    const mk = new maplibregl.Marker({ element: div, anchor: "center" })
-      .setLngLat([cp.lng, cp.lat])
-      .addTo(m);
-    state.forkMarkers.push({ mk, el: div, cp });
-  });
 
   if (!state.vehicleMarker) {
     const vEl = document.createElement("div");
@@ -1854,20 +2113,6 @@ function renderAllMapData() {
   }
 
   applyRouteLineVisibility();
-  updateForkMarkersVisibility();
-}
-
-function updateForkMarkersVisibility() {
-  if (!state.map || !state.forkMarkers.length) return;
-  const zoom = state.map.getZoom();
-  const curAlong = state.mode === "sim" ? state.simDistMeters : state.lastAlongMeters;
-
-  state.forkMarkers.forEach(({ el: div, cp }) => {
-    const endDist = cp.endDistAlong || cp.distAlong;
-    const passed = endDist - curAlong < -35;
-    const shouldHide = zoom < 12.2 || (state.cameraMode !== "overview" && passed);
-    div.classList.toggle("is-hidden", shouldHide);
-  });
 }
 
 /* ================= VEHICLE POSITION, 3D ARROW, LOOP/ROUNDABOUT HUD & VOICE ================= */
@@ -1907,11 +2152,12 @@ function sampleRouteAtDistance(meters) {
 function resetVehicleToStart() {
   state.simDistMeters = 0;
   state.lastAlongMeters = 0;
-  state.currentSimKmh = 58;
+  state.currentSimKmh = 64;
   state.activeCheckpointId = null;
   state.dismissedCheckpointId = null;
   state.bridgeAlertShownAt = 0;
   state.lastSpokenContextId = null;
+  state.bankAngleDeg = 0;
   el.simScrubber.value = "0";
   state.spokenAlerts.clear();
   cancelSpeech();
@@ -1919,6 +2165,7 @@ function resetVehicleToStart() {
   if (sample) {
     state.vehiclePos = sample.coord;
     state.vehicleHeading = sample.heading;
+    state.smoothCameraBearing = sample.heading;
     updateNavigationHUD();
     focusCameraOnVehicle(true);
   }
@@ -1930,11 +2177,12 @@ function jumpToCheckpoint(cp) {
   const startAlong = Math.max(0, cp.distAlong - 280);
   state.simDistMeters = startAlong;
   state.lastAlongMeters = startAlong;
-  state.currentSimKmh = 46;
+  state.currentSimKmh = 52;
   state.activeCheckpointId = null;
   state.dismissedCheckpointId = null;
   state.bridgeAlertShownAt = 0;
   state.lastSpokenContextId = null;
+  state.bankAngleDeg = 0;
   state.spokenAlerts.delete(`${cp.id}-prep`);
   state.spokenAlerts.delete(`${cp.id}-action`);
 
@@ -1942,49 +2190,100 @@ function jumpToCheckpoint(cp) {
   if (sample) {
     state.vehiclePos = sample.coord;
     state.vehicleHeading = sample.heading;
+    state.smoothCameraBearing = sample.heading;
     state.simSpeed = 1;
     el.btnSimSpeed.textContent = "1x";
     state.simPlaying = true;
     setPlayButtonUI(true);
     state.cameraMode = "street";
-    state.followZoom = 18.8;
+    state.followZoom = 19.1;
     setCameraButtonUI("street");
     updateNavigationHUD();
     focusCameraOnVehicle(true);
-    showToast(`Probando: ${cp.shortLabel}`);
   }
 }
 
 function focusCameraOnVehicle(immediate = false) {
   if (!state.map || !state.vehiclePos) return;
+  if (immediate || state.smoothCameraBearing == null) {
+    state.smoothCameraBearing = state.vehicleHeading;
+  } else {
+    const diff = normalizeAngle(state.vehicleHeading - state.smoothCameraBearing);
+    state.smoothCameraBearing = (state.smoothCameraBearing + diff * 0.24 + 360) % 360;
+  }
+
   if (state.cameraMode === "street") {
     const opts = {
       center: state.vehiclePos,
       zoom: state.followZoom,
-      pitch: 74,
-      bearing: state.vehicleHeading,
-      padding: { top: Math.round(window.innerHeight * 0.34), bottom: 0, left: 0, right: 0 }
+      pitch: 76,
+      bearing: state.smoothCameraBearing,
+      padding: { top: Math.round(window.innerHeight * 0.36), bottom: 0, left: 0, right: 0 }
     };
     if (immediate) state.map.jumpTo(opts);
-    else state.map.easeTo({ ...opts, duration: 220, easing: (t) => t });
+    else state.map.easeTo({ ...opts, duration: 180, easing: (t) => t });
   } else if (state.cameraMode === "aerial") {
     const opts = {
       center: state.vehiclePos,
       zoom: state.followZoom,
-      pitch: 56,
-      bearing: state.vehicleHeading,
+      pitch: 58,
+      bearing: state.smoothCameraBearing,
       padding: { top: 0, bottom: 0, left: 0, right: 0 }
     };
     if (immediate) state.map.jumpTo(opts);
-    else state.map.easeTo({ ...opts, duration: 220, easing: (t) => t });
+    else state.map.easeTo({ ...opts, duration: 180, easing: (t) => t });
   } else {
     state.map.easeTo({
       center: state.vehiclePos,
       bearing: 0,
       pitch: 12,
       padding: { top: 0, bottom: 0, left: 0, right: 0 },
-      duration: immediate ? 0 : 250
+      duration: immediate ? 0 : 240
     });
+  }
+}
+
+function updateRacingTelemetryUI(kmh, isBraking) {
+  const roundedKmh = Math.max(0, Math.round(kmh || 0));
+  if (el.speedBadge) {
+    el.speedBadge.textContent = String(roundedKmh);
+  }
+
+  let gear = "D1";
+  let bandMin = 0;
+  let bandMax = 18;
+  if (roundedKmh > 96) {
+    gear = "D6";
+    bandMin = 96;
+    bandMax = 135;
+  } else if (roundedKmh > 72) {
+    gear = "D5";
+    bandMin = 72;
+    bandMax = 96;
+  } else if (roundedKmh > 52) {
+    gear = "D4";
+    bandMin = 52;
+    bandMax = 72;
+  } else if (roundedKmh > 34) {
+    gear = "D3";
+    bandMin = 34;
+    bandMax = 52;
+  } else if (roundedKmh > 18) {
+    gear = "D2";
+    bandMin = 18;
+    bandMax = 34;
+  }
+
+  const ratio = Math.max(0.18, Math.min(0.95, (roundedKmh - bandMin) / Math.max(1, bandMax - bandMin)));
+  const rpmPct = Math.round(24 + ratio * 70);
+
+  if (el.gearBadge) {
+    el.gearBadge.textContent = gear;
+    el.gearBadge.classList.toggle("braking", Boolean(isBraking));
+  }
+  if (el.rpmBarFill) {
+    el.rpmBarFill.style.width = `${rpmPct}%`;
+    el.rpmBarFill.classList.toggle("braking", Boolean(isBraking));
   }
 }
 
@@ -2008,14 +2307,19 @@ function updateNavigationHUD() {
 
   const lookAhead = sampleRouteAtDistance(Math.min(totalDist, curAlong + 75));
   const targetBearing = lookAhead ? calculateBearing(state.vehiclePos, lookAhead.coord) : state.vehicleHeading;
-  const arrowAngle = state.cameraMode !== "overview"
-    ? normalizeAngle(targetBearing - state.vehicleHeading)
-    : targetBearing;
+  const relTurn = normalizeAngle(targetBearing - state.vehicleHeading);
+  const arrowAngle = state.cameraMode !== "overview" ? relTurn : targetBearing;
+
+  const targetBank = Math.max(-18, Math.min(18, relTurn * 0.35));
+  state.bankAngleDeg += (targetBank - (state.bankAngleDeg || 0)) * 0.25;
+  const arrowSvg = state.vehicleMarker?.getElement()?.querySelector(".road-arrow-svg");
+  if (arrowSvg) {
+    arrowSvg.style.transform = `perspective(240px) rotateX(18deg) rotateY(${state.bankAngleDeg.toFixed(1)}deg)`;
+  }
 
   el.arrow3d.style.transform = `rotateX(34deg) rotateZ(${arrowAngle.toFixed(1)}deg)`;
-  el.speedBadge.textContent = `${Math.round(state.speedKmh)} km/h`;
 
-  // Buscar checkpoint activo (incluye permanecer activo mientras cruza un bucle 270° o rotonda)
+  // Buscar checkpoint activo (incluye permanecer activo mientras cruza un bucle 270 o rotonda)
   let nearestCp = null;
   let nearestCpDelta = Infinity;
   for (const cp of state.activeCheckpoints) {
@@ -2038,6 +2342,13 @@ function updateNavigationHUD() {
     }
   }
 
+  const isBrakingZone = Boolean(
+    nearestCp &&
+    (nearestCp.kind === "loop270" || nearestCp.kind === "hairpin" || nearestCp.kind === "roundabout") &&
+    (nearestCp._currentlyInside || Math.max(0, nearestCp.distAlong - curAlong) <= 180)
+  );
+  updateRacingTelemetryUI(state.speedKmh, isBrakingZone);
+
   if (state.lastSpokenContextId && (!nearestCp || nearestCp.id !== state.lastSpokenContextId)) {
     cancelSpeech();
     state.lastSpokenContextId = null;
@@ -2051,21 +2362,19 @@ function updateNavigationHUD() {
   const showLanes = !state.cleanUiMode && (Boolean(nearestCp) || nextStepDist <= 550);
   el.laneForkBar.classList.toggle("hidden", !showLanes);
 
+  // Nunca mostrar banners temporales ni ventanas emergentes sobre el mapa
+  if (el.bridgeAlert) {
+    el.bridgeAlert.classList.add("hidden");
+  }
+
   if (nearestCp) {
     if (state.activeCheckpointId !== nearestCp.id) {
       state.activeCheckpointId = nearestCp.id;
-      state.bridgeAlertShownAt = performance.now();
     }
 
     const isInside = Boolean(nearestCp._currentlyInside);
     const entryDist = Math.max(0, nearestCp.distAlong - curAlong);
     const dispDist = isInside ? Math.max(0, (nearestCp.endDistAlong || nearestCp.distAlong) - curAlong) : entryDist;
-    const alertExpired = performance.now() - state.bridgeAlertShownAt > 5500;
-    const showBridgeBanner =
-      !state.cleanUiMode &&
-      state.dismissedCheckpointId !== nearestCp.id &&
-      !alertExpired &&
-      (dispDist > 15 || isInside);
 
     let headline;
     if (isInside && (nearestCp.kind === "loop270" || nearestCp.kind === "hairpin")) {
@@ -2079,7 +2388,18 @@ function updateNavigationHUD() {
 
     el.hudCard.classList.add("checkpoint-active");
     el.checkpointBadge.classList.remove("hidden");
-    el.checkpointBadge.innerHTML = `<i data-lucide="alert-triangle" class="ico-xs"></i> ${nearestCp.kind === "roundabout" ? "Rotonda" : nearestCp.kind === "loop270" ? "Bucle 270°" : nearestCp.kind === "hairpin" ? "Vuelta Cerrada" : "Desvío"}`;
+    const badgeLabel =
+      nearestCp.kind === "roundabout"
+        ? "Rotonda"
+        : nearestCp.kind === "loop270"
+        ? "Bucle 270"
+        : nearestCp.kind === "hairpin"
+        ? "Vuelta Cerrada"
+        : "Desvío";
+    if (el.checkpointBadge.dataset.label !== badgeLabel) {
+      el.checkpointBadge.dataset.label = badgeLabel;
+      el.checkpointBadge.innerHTML = `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><span>${badgeLabel}</span>`;
+    }
 
     if (nearestCp.recommendedSpeed && nearestCp.recommendedSpeed <= 35) {
       el.curveSpeedBadge.textContent = `Máx ${nearestCp.recommendedSpeed} km/h`;
@@ -2088,25 +2408,13 @@ function updateNavigationHUD() {
       el.curveSpeedBadge.classList.add("hidden");
     }
 
-    el.bridgeAlert.classList.toggle("hidden", !showBridgeBanner);
     el.hudDistance.textContent = formatDistance(dispDist);
     el.hudTitle.textContent = headline;
     el.hudSubtitle.textContent = state.showRouteLine
       ? isInside
         ? `${nearestCp.title} · Resta ${formatDistance(dispDist)} del giro`
         : nearestCp.title
-      : "Vista HD despejada · Mantente derecho";
-
-    if (showBridgeBanner) {
-      el.bridgeAlertTitle.textContent = nearestCp.title;
-      el.bridgeAlertDist.textContent = isInside ? `Faltan ${formatDistance(dispDist)}` : `a ${formatDistance(entryDist)}`;
-      el.bridgePathsGrid.innerHTML = nearestCp.paths
-        .map((p) => {
-          const icon = p.type === "take" ? svgIcon("check", 13) : svgIcon("ban", 13);
-          return `<div class="bridge-path-item ${p.type}">${icon}<span>${escapeHtml(p.label)}</span></div>`;
-        })
-        .join("");
-    }
+      : "Vista 3D despejada · Mantente derecho";
 
     highlightLanes(nearestCp.takeLane, true);
 
@@ -2123,13 +2431,12 @@ function updateNavigationHUD() {
     el.hudCard.classList.remove("checkpoint-active");
     el.checkpointBadge.classList.add("hidden");
     el.curveSpeedBadge.classList.add("hidden");
-    el.bridgeAlert.classList.add("hidden");
 
     el.hudDistance.textContent = formatDistance(nextStepDist);
     const { lane, label, stage } = mapModifierToSpanish(nextStep, nextStepDist);
     el.hudTitle.textContent = label;
     if (!state.showRouteLine) {
-      el.hudSubtitle.textContent = "Vista HD despejada · Mantente derecho";
+      el.hudSubtitle.textContent = "Vista 3D despejada · Mantente derecho";
     } else if (stage === "cruise") {
       el.hudSubtitle.textContent = nextStep?.name
         ? `Sigue de frente por ${nextStep.name}`
@@ -2159,8 +2466,6 @@ function updateNavigationHUD() {
       }
     }
   }
-
-  updateForkMarkersVisibility();
 }
 
 function mapModifierToSpanish(step, distMeters = Infinity) {
@@ -2254,10 +2559,10 @@ function computeTargetSimSpeedKmh(curAlong) {
   for (const cp of state.activeCheckpoints) {
     const endD = cp.endDistAlong || cp.distAlong;
     if (curAlong >= cp.distAlong - 120 && curAlong <= endD + 25) {
-      return cp.recommendedSpeed || 32;
+      return cp.recommendedSpeed || 30;
     }
   }
-  return 66;
+  return 76;
 }
 
 function animationLoop(ts) {
@@ -2295,16 +2600,21 @@ function animationLoop(ts) {
 
 function setPlayButtonUI(playing) {
   el.btnPlayPause.innerHTML = playing
-    ? `<i data-lucide="pause" class="ico-sm"></i><span>Pausar</span>`
-    : `<i data-lucide="play" class="ico-sm"></i><span>Simular</span>`;
+    ? `<i data-lucide="pause" class="ico-sm"></i>`
+    : `<i data-lucide="play" class="ico-sm"></i>`;
+  const label = playing ? "Pausar simulación" : "Simular recorrido";
+  el.btnPlayPause.title = label;
+  el.btnPlayPause.setAttribute("aria-label", label);
   refreshLucideIcons();
 }
 
 function setCameraButtonUI(mode) {
   const active = mode !== "overview";
-  const label = mode === "street" ? "Calle 3D" : mode === "aerial" ? "Aérea 3D" : "2D Ruta";
+  const label = mode === "street" ? "Vista Calle 3D" : mode === "aerial" ? "Vista Aérea 3D" : "Vista 2D Ruta";
   el.btnToggleCamera.classList.toggle("active", active);
-  el.btnToggleCamera.innerHTML = `<i data-lucide="compass" class="ico-md"></i><span>${label}</span>`;
+  el.btnToggleCamera.innerHTML = `<i data-lucide="compass" class="ico-md"></i>`;
+  el.btnToggleCamera.title = label;
+  el.btnToggleCamera.setAttribute("aria-label", label);
   refreshLucideIcons();
 }
 
@@ -2316,15 +2626,16 @@ function refreshLucideIcons() {
 
 function startGpsMode() {
   if (!("geolocation" in navigator)) {
-    showToast("GPS no soportado en este navegador");
     return;
   }
   state.mode = "gps";
   state.simPlaying = false;
   setPlayButtonUI(false);
-  el.btnStartGps.innerHTML = `<i data-lucide="navigation" class="ico-sm"></i><span>Detener</span>`;
+  el.btnStartGps.innerHTML = `<i data-lucide="navigation" class="ico-sm"></i>`;
+  el.btnStartGps.title = "Detener GPS";
+  el.btnStartGps.setAttribute("aria-label", "Detener GPS");
   el.btnStartGps.classList.add("active-gps");
-  el.modeBadge.textContent = "GPS en vivo";
+  el.modeBadge.textContent = "GPS";
   el.modeBadge.classList.add("gps-live");
   refreshLucideIcons();
 
@@ -2344,7 +2655,7 @@ function startGpsMode() {
       updateNavigationHUD();
       focusCameraOnVehicle(false);
     },
-    (err) => showToast(`GPS no disponible: ${err.message}`),
+    () => {},
     { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 }
   );
 }
@@ -2357,9 +2668,11 @@ function stopGpsMode() {
   window.removeEventListener("deviceorientationabsolute", onDeviceCompass, true);
   window.removeEventListener("deviceorientation", onDeviceCompass, true);
   state.mode = "sim";
-  el.btnStartGps.innerHTML = `<i data-lucide="navigation" class="ico-sm"></i><span>GPS</span>`;
+  el.btnStartGps.innerHTML = `<i data-lucide="navigation" class="ico-sm"></i>`;
+  el.btnStartGps.title = "GPS en vivo";
+  el.btnStartGps.setAttribute("aria-label", "GPS en vivo");
   el.btnStartGps.classList.remove("active-gps");
-  el.modeBadge.textContent = "Simulador";
+  el.modeBadge.textContent = "SIM";
   el.modeBadge.classList.remove("gps-live");
   refreshLucideIcons();
 }
@@ -2372,23 +2685,7 @@ function onDeviceCompass(ev) {
   }
 }
 
-/* ================= DYNAMIC CHECKPOINT STRIP & SQL ROUTE SELECTOR ================= */
-function renderCheckpointStrip() {
-  if (!state.activeCheckpoints.length) {
-    el.checkpointStrip.innerHTML = `<span class="cp-pill">Ruta directa</span>`;
-    return;
-  }
-  el.checkpointStrip.innerHTML = state.activeCheckpoints
-    .map((cp) => `<button type="button" class="cp-pill" data-cp="${cp.id}">${escapeHtml(cp.shortLabel)}</button>`)
-    .join("");
-
-  el.checkpointStrip.querySelectorAll(".cp-pill[data-cp]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const cp = state.activeCheckpoints.find((c) => c.id === btn.dataset.cp);
-      if (cp) jumpToCheckpoint(cp);
-    });
-  });
-}
+/* ================= SQL ROUTE SELECTOR ================= */
 
 function renderLegPills() {
   const routes = sqlGetAllRoutes();
@@ -2600,7 +2897,7 @@ function bindEvents() {
     state.cameraMode = order[(order.indexOf(state.cameraMode) + 1) % order.length];
     setCameraButtonUI(state.cameraMode);
     if (state.cameraMode === "street") {
-      state.followZoom = 18.8;
+      state.followZoom = 19.1;
       focusCameraOnVehicle(false);
     } else if (state.cameraMode === "aerial") {
       state.followZoom = 16.4;
@@ -2621,7 +2918,10 @@ function bindEvents() {
   el.btnToggleTheme.addEventListener("click", () => {
     const order = ["satellite", "light", "dark"];
     state.theme = order[(order.indexOf(state.theme) + 1) % order.length];
-    el.btnToggleTheme.innerHTML = `<i data-lucide="layers" class="ico-md"></i><span>${THEME_LABELS[state.theme]}</span>`;
+    const themeLabel = `Mapa: ${THEME_LABELS[state.theme]}`;
+    el.btnToggleTheme.innerHTML = `<i data-lucide="layers" class="ico-md"></i>`;
+    el.btnToggleTheme.title = themeLabel;
+    el.btnToggleTheme.setAttribute("aria-label", themeLabel);
     refreshLucideIcons();
     state.mapReady = false;
     state.map.setStyle(MAP_STYLES[state.theme]);
@@ -2629,14 +2929,16 @@ function bindEvents() {
 
   el.btnToggleRouteLine.addEventListener("click", () => {
     state.showRouteLine = !state.showRouteLine;
+    const lineLabel = state.showRouteLine ? "Ocultar ruta verde" : "Mostrar ruta verde";
     el.btnToggleRouteLine.classList.toggle("active", state.showRouteLine);
     el.btnToggleRouteLine.innerHTML = state.showRouteLine
-      ? `<i data-lucide="route" class="ico-md"></i><span>Guía</span>`
-      : `<i data-lucide="eye-off" class="ico-md"></i><span>Sin línea</span>`;
+      ? `<i data-lucide="route" class="ico-md"></i>`
+      : `<i data-lucide="eye-off" class="ico-md"></i>`;
+    el.btnToggleRouteLine.title = lineLabel;
+    el.btnToggleRouteLine.setAttribute("aria-label", lineLabel);
     refreshLucideIcons();
     applyRouteLineVisibility();
     updateNavigationHUD();
-    showToast(state.showRouteLine ? "Línea verde visible" : "Línea verde oculta · Carretera libre");
   });
 
   el.btnToggleCleanUi.addEventListener("click", () => {
@@ -2674,10 +2976,13 @@ function bindEvents() {
 
   el.btnToggleVoice.addEventListener("click", () => {
     state.voiceEnabled = !state.voiceEnabled;
+    const voiceLabel = state.voiceEnabled ? "Silenciar voz" : "Activar voz";
     el.btnToggleVoice.classList.toggle("active", state.voiceEnabled);
     el.btnToggleVoice.innerHTML = state.voiceEnabled
-      ? `<i data-lucide="volume-2" class="ico-md"></i><span>Voz</span>`
-      : `<i data-lucide="volume-x" class="ico-md"></i><span>Muda</span>`;
+      ? `<i data-lucide="volume-2" class="ico-md"></i>`
+      : `<i data-lucide="volume-x" class="ico-md"></i>`;
+    el.btnToggleVoice.title = voiceLabel;
+    el.btnToggleVoice.setAttribute("aria-label", voiceLabel);
     refreshLucideIcons();
     if (state.voiceEnabled) speakSpanish("Voz activada.");
     else cancelSpeech();

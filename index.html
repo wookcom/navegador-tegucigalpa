@@ -47,44 +47,43 @@
 
         <div class="ios-instruction-col">
           <div class="ios-meta-row">
-            <span class="ios-pill ios-pill-mode" id="modeBadge">Simulador</span>
+            <span class="ios-pill ios-pill-mode" id="modeBadge">SIM</span>
             <span class="ios-pill ios-pill-warn hidden" id="checkpointBadge">
               <i data-lucide="alert-triangle" class="ico-xs"></i>
-              Desvío
+              DESVÍO
             </span>
-            <span class="ios-pill ios-pill-curve hidden" id="curveSpeedBadge">Máx 25 km/h</span>
-            <span class="ios-pill ios-pill-speed" id="speedBadge">0 km/h</span>
+            <span class="ios-pill ios-pill-curve hidden" id="curveSpeedBadge">MÁX 25</span>
           </div>
           <h1 class="ios-hud-title" id="hudTitle">Calculando ruta…</h1>
-          <p class="ios-hud-subtitle" id="hudSubtitle">Cargando trayecto satelital y pasos a desnivel</p>
+          <p class="ios-hud-subtitle" id="hudSubtitle">Satélite 4K · Modelo 3D</p>
 
           <!-- Compact 3-Lane Fork Indicator -->
           <div class="ios-lane-bar" id="laneForkBar">
             <div class="ios-lane-slot" data-lane="left">
               <i data-lucide="arrow-up-left" class="ico-sm"></i>
-              <span>Carril Izquierdo</span>
+              <span>Izq</span>
             </div>
             <div class="ios-lane-slot" data-lane="center">
               <i data-lucide="arrow-up" class="ico-sm"></i>
-              <span>Mantente Derecho</span>
+              <span>Recto</span>
             </div>
             <div class="ios-lane-slot" data-lane="right">
               <i data-lucide="arrow-up-right" class="ico-sm"></i>
-              <span>Carril Derecho</span>
+              <span>Der</span>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Bridge Fork Decision Banner (auto-shown briefly near bridge) -->
-      <div class="ios-bridge-alert hidden" id="bridgeAlert">
+      <!-- Alert banner kept permanently hidden for distraction-free racing HUD -->
+      <div class="ios-bridge-alert hidden" id="bridgeAlert" aria-hidden="true">
         <div class="ios-bridge-header">
           <span class="ios-bridge-title-wrap">
             <i data-lucide="git-fork" class="ico-sm"></i>
-            <strong id="bridgeAlertTitle">Desvío de puente</strong>
+            <strong id="bridgeAlertTitle"></strong>
           </span>
           <div class="ios-bridge-right">
-            <span class="ios-bridge-dist" id="bridgeAlertDist">a 250 m</span>
+            <span class="ios-bridge-dist" id="bridgeAlertDist"></span>
             <button type="button" class="ios-bridge-close" id="btnDismissBridgeAlert" aria-label="Ocultar alerta">
               <i data-lucide="x" class="ico-xs"></i>
             </button>
@@ -94,62 +93,51 @@
       </div>
     </header>
 
-    <!-- Right-Edge Apple Maps Style Floating Icon Gallery -->
+    <!-- Right-Edge Apple Maps Icon-Only Control Gallery -->
     <nav class="ios-map-controls" aria-label="Controles de mapa">
-      <button type="button" class="ios-ctrl-btn active" id="btnToggleTheme" title="Cambiar capa de mapa (Satélite / Mapa / Oscuro)">
+      <button type="button" class="ios-ctrl-btn active" id="btnToggleTheme" title="Satélite 4K / Mapa / Oscuro" aria-label="Capa de mapa">
         <i data-lucide="layers" class="ico-md"></i>
-        <span>Satélite</span>
       </button>
-      <button type="button" class="ios-ctrl-btn active" id="btnToggleRouteLine" title="Mostrar u ocultar la línea verde sobre la carretera">
+      <button type="button" class="ios-ctrl-btn active" id="btnToggleRouteLine" title="Mostrar u ocultar línea guía" aria-label="Línea guía">
         <i data-lucide="route" class="ico-md"></i>
-        <span>Guía</span>
       </button>
-      <button type="button" class="ios-ctrl-btn" id="btnToggleCleanUi" title="Ocultar todos los controles para ver solo el mapa">
+      <button type="button" class="ios-ctrl-btn" id="btnToggleCleanUi" title="Ocultar controles" aria-label="Ocultar controles">
         <i data-lucide="eye-off" class="ico-md"></i>
-        <span>Ocultar</span>
       </button>
-      <button type="button" class="ios-ctrl-btn active" id="btnToggleCamera" title="Cambiar cámara: Calle 3D / Aérea 3D / 2D Ruta">
+      <button type="button" class="ios-ctrl-btn active" id="btnToggleCamera" title="Cámara: Calle 3D / Aérea 3D / 2D" aria-label="Cámara">
         <i data-lucide="compass" class="ico-md"></i>
-        <span>Calle 3D</span>
       </button>
-      <button type="button" class="ios-ctrl-btn active" id="btnToggleVoice" title="Activar o silenciar indicaciones de voz">
+      <button type="button" class="ios-ctrl-btn active" id="btnToggleVoice" title="Voz de navegación" aria-label="Voz">
         <i data-lucide="volume-2" class="ico-md"></i>
-        <span>Voz</span>
       </button>
-      <button type="button" class="ios-ctrl-btn" id="btnToggleItinerary" title="Configurar y reordenar paradas">
-        <i data-lucide="sliders-horizontal" class="ico-md"></i>
-        <span>Ruta</span>
+      <button type="button" class="ios-ctrl-btn" id="btnToggleItinerary" title="Rutas y Base de Datos SQL" aria-label="Base de Datos SQL">
+        <i data-lucide="database" class="ico-md"></i>
       </button>
       <div class="ios-ctrl-divider"></div>
-      <button type="button" class="ios-ctrl-btn ios-ctrl-mini" id="btnZoomIn" title="Acercar zoom" aria-label="Acercar zoom">
+      <button type="button" class="ios-ctrl-btn ios-ctrl-mini" id="btnZoomIn" title="Acercar" aria-label="Acercar zoom">
         <i data-lucide="plus" class="ico-sm"></i>
       </button>
-      <button type="button" class="ios-ctrl-btn ios-ctrl-mini" id="btnZoomOut" title="Alejar zoom" aria-label="Alejar zoom">
+      <button type="button" class="ios-ctrl-btn ios-ctrl-mini" id="btnZoomOut" title="Alejar" aria-label="Alejar zoom">
         <i data-lucide="minus" class="ico-sm"></i>
       </button>
     </nav>
 
-    <button type="button" class="ios-restore-ui hidden" id="btnRestoreUi" title="Mostrar todos los controles">
+    <button type="button" class="ios-restore-ui hidden" id="btnRestoreUi" title="Mostrar controles" aria-label="Mostrar controles">
       <i data-lucide="eye" class="ico-sm"></i>
-      <span>Controles</span>
     </button>
 
-    <!-- Bottom Minimalist iOS Dock -->
+    <!-- Bottom Minimalist iOS + Racing Telemetry Dock -->
     <footer class="ios-bottom-dock">
-      <!-- Compact Route Legend + Bridge Jump Chips -->
-      <div class="ios-strip-row">
-        <div class="ios-legend-compact" aria-label="Leyenda de caminos">
-          <span class="ios-dot-label"><i class="dot dot-green"></i>Correcto</span>
-          <span class="ios-dot-label"><i class="dot dot-red"></i>Evitar</span>
-          <span class="ios-dot-label"><i class="dot dot-amber"></i>Alterno</span>
-        </div>
-        <div class="ios-checkpoint-strip" id="checkpointStrip"></div>
-      </div>
-
-      <!-- Segmented Tramo Selector + Compact Action Bar -->
       <div class="ios-dock-card">
-        <div class="ios-dock-top">
-          <div class="ios-segmented" id="legFilterPills"></div>
+        <div class="racing-telemetry">
+          <div class="speedo-block">
+            <span class="speedo-value" id="speedBadge">0</span>
+            <span class="speedo-unit">KM/H</span>
+          </div>
+          <span class="gear-pill" id="gearBadge">D1</span>
+          <div class="rpm-track" aria-hidden="true">
+            <div class="rpm-bar-fill" id="rpmBarFill"></div>
+          </div>
           <div class="ios-metrics">
             <span id="metricTotalDist">-- km</span>
             <span class="sep">·</span>
@@ -159,16 +147,18 @@
           </div>
         </div>
 
+        <div class="ios-dock-top">
+          <div class="ios-segmented" id="legFilterPills"></div>
+        </div>
+
         <div class="ios-dock-actions">
-          <button type="button" class="ios-btn ios-btn-blue" id="btnStartGps">
+          <button type="button" class="ios-btn ios-btn-blue ios-btn-icon" id="btnStartGps" title="GPS en vivo" aria-label="GPS">
             <i data-lucide="navigation" class="ico-sm"></i>
-            <span>GPS</span>
           </button>
-          <button type="button" class="ios-btn ios-btn-green" id="btnPlayPause">
+          <button type="button" class="ios-btn ios-btn-green ios-btn-icon" id="btnPlayPause" title="Simular / Pausar" aria-label="Simular">
             <i data-lucide="play" class="ico-sm"></i>
-            <span>Simular</span>
           </button>
-          <button type="button" class="ios-btn ios-btn-glass" id="btnSimSpeed">1x</button>
+          <button type="button" class="ios-btn ios-btn-glass" id="btnSimSpeed" title="Velocidad de simulación">1x</button>
           <input type="range" id="simScrubber" min="0" max="1000" value="0" aria-label="Progreso en ruta" />
         </div>
       </div>
