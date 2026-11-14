@@ -53,10 +53,12 @@ html, body, #app {
   top: max(10px, env(safe-area-inset-top));
   left: 50%;
   transform: translateX(-50%);
-  width: min(92vw, 520px);
+  width: auto;
+  max-width: min(90vw, 340px);
   z-index: 10;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 8px;
   pointer-events: none;
 }
@@ -67,37 +69,43 @@ html, body, #app {
 
 .ios-nav-banner {
   display: grid;
-  grid-template-columns: 74px 1fr;
-  gap: 11px;
+  grid-template-columns: 60px auto;
+  gap: 10px;
   align-items: center;
-  background: rgba(16, 18, 24, 0.72);
+  background: rgba(10, 14, 22, 0.78);
   backdrop-filter: blur(28px) saturate(200%);
   -webkit-backdrop-filter: blur(28px) saturate(200%);
   border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 22px;
-  padding: 9px 13px;
+  border-radius: 999px;
+  padding: 8px 14px;
   box-shadow: var(--ios-shadow);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: opacity 0.28s ease, transform 0.28s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ios-nav-banner.hud-auto-hidden {
+  opacity: 0;
+  transform: translateY(-18px) scale(0.92);
+  pointer-events: none;
 }
 
 .ios-nav-banner.checkpoint-active {
-  border-color: var(--ios-amber);
-  box-shadow: 0 0 0 1px rgba(255, 159, 10, 0.35), var(--ios-shadow);
+  border-color: rgba(0, 245, 255, 0.62);
+  box-shadow: 0 0 18px rgba(0, 245, 255, 0.24), var(--ios-shadow);
 }
 
 .ios-arrow-stage {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
 }
 
 .ios-arrow-orb {
-  width: 64px;
-  height: 64px;
+  width: 50px;
+  height: 50px;
   border-radius: 50%;
-  background: radial-gradient(circle at 50% 40%, rgba(48, 209, 88, 0.28), rgba(18, 22, 28, 0.85) 75%);
-  border: 1.5px solid rgba(48, 209, 88, 0.65);
+  background: radial-gradient(circle at 50% 40%, rgba(0, 245, 212, 0.3), rgba(10, 14, 22, 0.9) 75%);
+  border: 1.5px solid rgba(0, 245, 212, 0.7);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -105,8 +113,8 @@ html, body, #app {
 }
 
 .ios-arrow-3d {
-  width: 44px;
-  height: 44px;
+  width: 34px;
+  height: 34px;
   transform-style: preserve-3d;
   transform: rotateX(34deg) rotateZ(0deg);
   transition: transform 0.14s linear;
@@ -119,12 +127,12 @@ html, body, #app {
 }
 
 .ios-distance-pill {
-  font-size: 0.78rem;
-  font-weight: 700;
+  font-size: 0.72rem;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
-  color: var(--ios-green);
-  background: rgba(48, 209, 88, 0.16);
-  padding: 2px 8px;
+  color: #00f5d4;
+  background: rgba(0, 245, 212, 0.14);
+  padding: 1px 7px;
   border-radius: 999px;
 }
 
@@ -135,69 +143,55 @@ html, body, #app {
   min-width: 0;
 }
 
-.ios-meta-row {
+.ios-meta-row,
+.ios-hud-subtitle {
+  display: none !important;
+}
+
+.hud-title-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-}
-
-.ios-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 0.68rem;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
-  color: var(--ios-text-secondary);
-}
-
-.ios-pill-mode.gps-live {
-  background: rgba(48, 209, 88, 0.22);
-  color: var(--ios-green);
-}
-
-.ios-pill-warn {
-  background: rgba(255, 159, 10, 0.24);
-  color: var(--ios-amber);
-}
-
-.ios-pill-curve {
-  background: rgba(255, 69, 58, 0.24);
-  color: #ff6961;
-  border: 1px solid rgba(255, 69, 58, 0.5);
-  font-variant-numeric: tabular-nums;
-}
-
-.ios-pill-speed {
-  margin-left: auto;
-  font-variant-numeric: tabular-nums;
-  color: var(--ios-text);
+  gap: 8px;
+  min-width: 0;
 }
 
 .ios-hud-title {
-  font-size: clamp(0.95rem, 2.3vw, 1.15rem);
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  line-height: 1.22;
+  font-size: 0.98rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.15;
   color: #ffffff;
-}
-
-.ios-hud-subtitle {
-  font-size: 0.78rem;
-  color: var(--ios-text-secondary);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-/* 3-Lane Fork Indicator */
+.hud-chevron-strip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: #00f5d4;
+}
+
+.hud-chevron-strip.brake {
+  color: #ff9f0a;
+}
+
+.hud-chevron-strip svg {
+  width: 12px;
+  height: 12px;
+  animation: chevronPulse 0.9s ease-in-out infinite;
+}
+
+.hud-chevron-strip svg:nth-child(2) { animation-delay: 0.14s; }
+.hud-chevron-strip svg:nth-child(3) { animation-delay: 0.28s; }
+
+/* 3-Lane Icon-Only Fork Indicator */
 .ios-lane-bar {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 5px;
-  margin-top: 3px;
+  grid-template-columns: repeat(3, auto);
+  justify-content: start;
+  gap: 4px;
+  margin-top: 2px;
 }
 
 .ios-lane-slot {
@@ -205,28 +199,83 @@ html, body, #app {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 4px 6px;
-  border-radius: 9px;
+  padding: 3px 8px;
+  border-radius: 999px;
   font-size: 0.7rem;
   font-weight: 600;
   background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   color: var(--ios-text-secondary);
   transition: all 0.18s ease;
 }
 
+.ios-lane-slot span {
+  display: none;
+}
+
 .ios-lane-slot.lane-take {
-  background: rgba(48, 209, 88, 0.24);
-  border-color: var(--ios-green);
+  background: rgba(0, 245, 212, 0.24);
+  border-color: #00f5d4;
   color: #ffffff;
+  box-shadow: 0 0 10px rgba(0, 245, 212, 0.35);
 }
 
 .ios-lane-slot.lane-avoid {
-  background: rgba(255, 69, 58, 0.18);
-  border-color: rgba(255, 69, 58, 0.5);
+  background: rgba(255, 69, 58, 0.16);
+  border-color: rgba(255, 69, 58, 0.45);
   color: #ffb3ae;
-  text-decoration: line-through;
-  opacity: 0.85;
+  opacity: 0.55;
+}
+
+/* Holographic Racing Chevron Turn Gate */
+.racing-turn-gate {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 4px 16px;
+  border-radius: 999px;
+  background: rgba(6, 12, 24, 0.58);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(0, 245, 255, 0.45);
+  box-shadow: 0 0 24px rgba(0, 245, 255, 0.28);
+  color: #00f5ff;
+  pointer-events: none;
+}
+
+.racing-turn-gate.brake-gate {
+  border-color: rgba(255, 59, 48, 0.65);
+  box-shadow: 0 0 26px rgba(255, 59, 48, 0.35);
+  color: #ff9f0a;
+}
+
+.racing-turn-gate .gate-chev {
+  width: 15px;
+  height: 15px;
+  filter: drop-shadow(0 0 6px currentColor);
+  animation: chevronPulse 0.85s linear infinite;
+}
+
+.racing-turn-gate.dir-right .gate-chev:nth-child(1) { animation-delay: 0s; }
+.racing-turn-gate.dir-right .gate-chev:nth-child(2) { animation-delay: 0.1s; }
+.racing-turn-gate.dir-right .gate-chev:nth-child(3) { animation-delay: 0.2s; }
+.racing-turn-gate.dir-right .gate-chev:nth-child(4) { animation-delay: 0.3s; }
+.racing-turn-gate.dir-right .gate-chev:nth-child(5) { animation-delay: 0.4s; }
+.racing-turn-gate.dir-right .gate-chev:nth-child(6) { animation-delay: 0.5s; }
+.racing-turn-gate.dir-right .gate-chev:nth-child(7) { animation-delay: 0.6s; }
+
+.racing-turn-gate.dir-left .gate-chev:nth-child(7) { animation-delay: 0s; }
+.racing-turn-gate.dir-left .gate-chev:nth-child(6) { animation-delay: 0.1s; }
+.racing-turn-gate.dir-left .gate-chev:nth-child(5) { animation-delay: 0.2s; }
+.racing-turn-gate.dir-left .gate-chev:nth-child(4) { animation-delay: 0.3s; }
+.racing-turn-gate.dir-left .gate-chev:nth-child(3) { animation-delay: 0.4s; }
+.racing-turn-gate.dir-left .gate-chev:nth-child(2) { animation-delay: 0.5s; }
+.racing-turn-gate.dir-left .gate-chev:nth-child(1) { animation-delay: 0.6s; }
+
+@keyframes chevronPulse {
+  0%, 100% { opacity: 0.28; transform: scale(0.92); }
+  45% { opacity: 1; transform: scale(1.12); }
 }
 
 /* Bridge Decision Banner */
@@ -373,7 +422,7 @@ html, body, #app {
   bottom: max(10px, env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
-  width: min(92vw, 540px);
+  width: min(92vw, 440px);
   z-index: 10;
   display: flex;
   flex-direction: column;
@@ -398,18 +447,19 @@ html, body, #app {
 }
 
 .speedo-value {
-  font-size: 1.5rem;
+  font-size: 1.75rem;
   font-weight: 800;
   line-height: 1;
   letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
   color: #ffffff;
+  text-shadow: 0 0 16px rgba(48, 209, 88, 0.45);
 }
 
 .speedo-unit {
-  font-size: 0.62rem;
+  font-size: 0.6rem;
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   color: var(--ios-text-secondary);
 }
 
@@ -424,9 +474,9 @@ html, body, #app {
   font-size: 0.72rem;
   font-weight: 800;
   letter-spacing: 0.04em;
-  background: rgba(48, 209, 88, 0.22);
-  color: var(--ios-green);
-  border: 1px solid rgba(48, 209, 88, 0.55);
+  background: rgba(0, 245, 212, 0.2);
+  color: #00f5d4;
+  border: 1px solid rgba(0, 245, 212, 0.55);
 }
 
 .gear-pill.braking {
@@ -437,9 +487,9 @@ html, body, #app {
 
 .rpm-track {
   flex: 1;
-  height: 7px;
+  height: 8px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
+  background: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.14) 0 8px, transparent 8px 10px);
   overflow: hidden;
   min-width: 48px;
 }
@@ -448,25 +498,27 @@ html, body, #app {
   height: 100%;
   width: 40%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #30d158 0%, #64ff9b 65%, #ff9f0a 100%);
+  background: linear-gradient(90deg, #00f5d4 0%, #30d158 55%, #ff9f0a 100%);
+  box-shadow: 0 0 10px rgba(0, 245, 212, 0.45);
   transition: width 0.14s linear, background 0.2s ease;
 }
 
 .rpm-bar-fill.braking {
   background: linear-gradient(90deg, #ff9f0a 0%, #ff453a 100%);
+  box-shadow: 0 0 10px rgba(255, 69, 58, 0.55);
 }
 
 .ios-dock-card {
-  background: rgba(16, 18, 24, 0.72);
+  background: rgba(10, 14, 22, 0.76);
   backdrop-filter: blur(28px) saturate(200%);
   -webkit-backdrop-filter: blur(28px) saturate(200%);
   border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 22px;
-  padding: 9px 13px;
+  border-radius: 24px;
+  padding: 8px 14px;
   box-shadow: var(--ios-shadow);
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 6px;
 }
 
 .ios-dock-top {
@@ -495,27 +547,21 @@ html, body, #app {
   border: none;
   background: transparent;
   color: var(--ios-text-secondary);
-  padding: 4px 9px;
+  padding: 4px 10px;
   border-radius: 8px;
-  font-size: 0.71rem;
-  font-weight: 600;
+  font-size: 0.72rem;
+  font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
 }
 
 .leg-pill.active {
-  background: rgba(255, 255, 255, 0.22);
+  background: rgba(0, 245, 212, 0.22);
   color: #ffffff;
 }
 
 .ios-metrics {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--ios-text-secondary);
+  display: none !important;
 }
 
 .ios-metrics .sep {
@@ -581,8 +627,8 @@ button {
 /* ================= APPLE MAPS STYLE MARKERS ================= */
 .vehicle-marker {
   position: relative;
-  width: 58px;
-  height: 58px;
+  width: 74px;
+  height: 74px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -593,7 +639,7 @@ button {
   position: absolute;
   inset: 4px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(10, 132, 255, 0.36) 0%, rgba(48, 209, 88, 0.14) 55%, rgba(48, 209, 88, 0) 75%);
+  background: radial-gradient(circle, rgba(0, 245, 212, 0.38) 0%, rgba(48, 209, 88, 0.16) 55%, rgba(48, 209, 88, 0) 75%);
   animation: roadPulse 1.8s ease-out infinite;
 }
 
@@ -605,9 +651,9 @@ button {
 
 .road-arrow-svg {
   position: relative;
-  width: 54px;
-  height: 54px;
-  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.72));
+  width: 68px;
+  height: 68px;
+  filter: drop-shadow(0 0 12px rgba(0, 245, 212, 0.65)) drop-shadow(0 8px 12px rgba(0, 0, 0, 0.75));
   transition: transform 0.14s ease-out;
 }
 
@@ -1054,27 +1100,35 @@ body.ios-clean-mode .ios-bottom-dock {
 
 @media (max-width: 640px) {
   .ios-hud-top {
-    width: calc(100vw - 16px);
+    width: auto;
+    max-width: calc(100vw - 16px);
   }
   .ios-nav-banner {
-    grid-template-columns: 62px 1fr;
-    gap: 9px;
-    padding: 8px 10px;
+    grid-template-columns: 50px auto;
+    gap: 8px;
+    padding: 6px 12px;
   }
   .ios-arrow-orb {
-    width: 48px;
-    height: 48px;
+    width: 44px;
+    height: 44px;
   }
   .ios-arrow-3d {
-    width: 32px;
-    height: 32px;
+    width: 30px;
+    height: 30px;
+  }
+  .ios-hud-title {
+    font-size: 0.9rem;
   }
   .ios-lane-slot {
-    font-size: 0.63rem;
-    padding: 3px 3px;
+    padding: 3px 7px;
   }
-  .ios-bridge-alert {
-    padding: 7px 10px;
+  .racing-turn-gate {
+    padding: 3px 12px;
+    gap: 4px;
+  }
+  .racing-turn-gate .gate-chev {
+    width: 13px;
+    height: 13px;
   }
   .ios-map-controls {
     top: 50%;
@@ -1093,13 +1147,10 @@ body.ios-clean-mode .ios-bottom-dock {
     width: calc(100vw - 16px);
   }
   .ios-dock-card {
-    padding: 8px 10px;
+    padding: 7px 10px;
     gap: 5px;
   }
   .speedo-value {
-    font-size: 1.25rem;
-  }
-  .ios-metrics {
-    display: none;
+    font-size: 1.45rem;
   }
 }

@@ -57,23 +57,18 @@ const INITIAL_SQL_ROUTES_SEED = [
 
 const SATELLITE_HYBRID_STYLE = {
   version: 8,
-  glyphs: "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
   sources: {
     "google-satellite-4k": {
       type: "raster",
       tiles: [
-        "https://mt0.google.com/vt/lyrs=s&hl=es&x={x}&y={y}&z={z}",
-        "https://mt1.google.com/vt/lyrs=s&hl=es&x={x}&y={y}&z={z}",
-        "https://mt2.google.com/vt/lyrs=s&hl=es&x={x}&y={y}&z={z}",
-        "https://mt3.google.com/vt/lyrs=s&hl=es&x={x}&y={y}&z={z}"
+        "https://mt0.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+        "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+        "https://mt2.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+        "https://mt3.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
       ],
       tileSize: 256,
       maxzoom: 20,
-      attribution: "Google Satellite 4K · OpenMapTiles"
-    },
-    openmaptiles: {
-      type: "vector",
-      url: "https://tiles.openfreemap.org/planet"
+      attribution: "Google Satellite 4K"
     }
   },
   layers: [
@@ -82,118 +77,77 @@ const SATELLITE_HYBRID_STYLE = {
       type: "raster",
       source: "google-satellite-4k",
       paint: {
-        "raster-contrast": 0.14,
-        "raster-saturation": 0.12,
-        "raster-brightness-min": 0.02,
+        "raster-contrast": 0.18,
+        "raster-saturation": 0.16,
+        "raster-brightness-min": 0.03,
         "raster-fade-duration": 0
-      }
-    },
-    {
-      id: "road-asphalt-casing",
-      type: "line",
-      source: "openmaptiles",
-      "source-layer": "transportation",
-      minzoom: 15.5,
-      filter: ["in", ["get", "class"], ["literal", ["motorway", "trunk", "primary", "secondary", "tertiary", "minor"]]],
-      layout: { "line-join": "round", "line-cap": "round" },
-      paint: {
-        "line-color": "#090d14",
-        "line-width": ["interpolate", ["linear"], ["zoom"], 15.5, 4, 19, 18],
-        "line-opacity": 0.32
-      }
-    },
-    {
-      id: "road-asphalt-surface",
-      type: "line",
-      source: "openmaptiles",
-      "source-layer": "transportation",
-      minzoom: 15.5,
-      filter: ["in", ["get", "class"], ["literal", ["motorway", "trunk", "primary", "secondary", "tertiary", "minor"]]],
-      layout: { "line-join": "round", "line-cap": "round" },
-      paint: {
-        "line-color": "#1e2430",
-        "line-width": ["interpolate", ["linear"], ["zoom"], 15.5, 2.5, 19, 14],
-        "line-opacity": 0.2
-      }
-    },
-    {
-      id: "buildings-3d",
-      type: "fill-extrusion",
-      source: "openmaptiles",
-      "source-layer": "building",
-      minzoom: 12.5,
-      filter: ["!", ["has", "hide_3d"]],
-      paint: {
-        "fill-extrusion-color": [
-          "interpolate",
-          ["linear"],
-          ["coalesce", ["get", "render_height"], 7],
-          0, "#d97757",
-          8, "#e7d8c5",
-          16, "#cbd5e1",
-          36, "#94a3b8"
-        ],
-        "fill-extrusion-height": [
-          "interpolate",
-          ["linear"],
-          ["zoom"],
-          12.5, 0,
-          14.0, ["max", 6.5, ["*", ["coalesce", ["get", "render_height"], 6.5], 1.45]]
-        ],
-        "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
-        "fill-extrusion-vertical-gradient": true,
-        "fill-extrusion-opacity": 0.88
-      }
-    },
-    {
-      id: "vector-road-labels",
-      type: "symbol",
-      source: "openmaptiles",
-      "source-layer": "transportation_name",
-      minzoom: 13.5,
-      layout: {
-        "symbol-placement": "line",
-        "text-field": ["coalesce", ["get", "name"], ["get", "ref"], ""],
-        "text-font": ["Noto Sans Regular"],
-        "text-size": ["interpolate", ["linear"], ["zoom"], 13.5, 10.5, 18.5, 14],
-        "text-rotation-alignment": "map"
-      },
-      paint: {
-        "text-color": "#ffffff",
-        "text-halo-color": "rgba(8, 12, 20, 0.94)",
-        "text-halo-width": 1.8
-      }
-    },
-    {
-      id: "vector-place-labels",
-      type: "symbol",
-      source: "openmaptiles",
-      "source-layer": "place",
-      minzoom: 11.5,
-      layout: {
-        "text-field": ["coalesce", ["get", "name"], ""],
-        "text-font": ["Noto Sans Regular"],
-        "text-size": ["interpolate", ["linear"], ["zoom"], 11.5, 11.5, 16, 14]
-      },
-      paint: {
-        "text-color": "#f8fafc",
-        "text-halo-color": "rgba(8, 12, 20, 0.94)",
-        "text-halo-width": 2
       }
     }
   ]
 };
 
+const ESRI_CLARITY_STYLE = {
+  version: 8,
+  sources: {
+    "google-sat-fallback": {
+      type: "raster",
+      tiles: [
+        "https://mt0.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+        "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+        "https://mt2.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+        "https://mt3.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
+      ],
+      tileSize: 256,
+      maxzoom: 20,
+      attribution: "Maxar / Google Satellite"
+    },
+    "esri-world-imagery": {
+      type: "raster",
+      tiles: [
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+      ],
+      tileSize: 256,
+      maxzoom: 18,
+      attribution: "Esri Maxar HD"
+    }
+  },
+  layers: [
+    {
+      id: "esri-fallback-base",
+      type: "raster",
+      source: "google-sat-fallback",
+      paint: {
+        "raster-contrast": 0.18,
+        "raster-saturation": 0.16,
+        "raster-fade-duration": 0
+      }
+    },
+    {
+      id: "esri-clarity-top",
+      type: "raster",
+      source: "esri-world-imagery",
+      maxzoom: 18.4,
+      paint: {
+        "raster-contrast": 0.16,
+        "raster-saturation": 0.12,
+        "raster-fade-duration": 0
+      }
+    }
+  ]
+};
+
+const DARK_RACING_STYLE = "https://basemaps.cartocdn.com/gl/dark-matter-nolabels-gl-style/style.json";
+
 const MAP_STYLES = {
   satellite: SATELLITE_HYBRID_STYLE,
-  light: "https://tiles.openfreemap.org/styles/liberty",
-  dark: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
+  light: ESRI_CLARITY_STYLE,
+  dark: DARK_RACING_STYLE
 };
 
 const THEME_LABELS = {
-  satellite: "Satélite",
-  light: "Mapa",
-  dark: "Oscuro"
+  satellite: "Satélite 4K",
+  light: "Satélite Maxar",
+  dark: "Nocturno"
 };
 
 const FALLBACK_OSM_STYLE = {
@@ -246,17 +200,22 @@ function roadArrowSvg() {
     <svg viewBox="0 0 120 120" class="road-arrow-svg" aria-hidden="true">
       <defs>
         <linearGradient id="roadFacetLeft" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#6cffab" />
-          <stop offset="100%" stop-color="#30d158" />
+          <stop offset="0%" stop-color="#00f5d4" />
+          <stop offset="100%" stop-color="#00e676" />
         </linearGradient>
         <linearGradient id="roadFacetRight" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#28b850" />
-          <stop offset="100%" stop-color="#0f7c33" />
+          <stop offset="0%" stop-color="#0a84ff" />
+          <stop offset="100%" stop-color="#00b86b" />
+        </linearGradient>
+        <linearGradient id="roadCore" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#ffffff" />
+          <stop offset="100%" stop-color="#00f5d4" />
         </linearGradient>
       </defs>
-      <polygon points="60,8 106,104 60,82 14,104" fill="#0b1f13" opacity="0.45" transform="translate(0,5)" />
-      <polygon points="60,8 60,82 14,104" fill="url(#roadFacetLeft)" stroke="#ffffff" stroke-width="4" stroke-linejoin="round" />
-      <polygon points="60,8 106,104 60,82" fill="url(#roadFacetRight)" stroke="#ffffff" stroke-width="4" stroke-linejoin="round" />
+      <polygon points="60,6 108,106 60,82 12,106" fill="#04151c" opacity="0.58" transform="translate(0,6)" />
+      <polygon points="60,6 60,82 12,106" fill="url(#roadFacetLeft)" stroke="#ffffff" stroke-width="3.8" stroke-linejoin="round" />
+      <polygon points="60,6 108,106 60,82" fill="url(#roadFacetRight)" stroke="#ffffff" stroke-width="3.8" stroke-linejoin="round" />
+      <polygon points="60,26 73,66 60,58 47,66" fill="url(#roadCore)" opacity="0.92" />
     </svg>
   `;
 }
@@ -278,7 +237,7 @@ const state = {
   dynamicAvoidFeatures: [],
   dynamicLoopFeatures: [],
   routeArrowFeatures: [],
-  proceduralHouseFeatures: [],
+  turnChevronFeatures: [],
   totalDistance: 0,
   totalDuration: 0,
 
@@ -296,9 +255,10 @@ const state = {
   speedKmh: 0,
   gpsWatchId: null,
   lastFrameTime: 0,
+  straightCruiseSince: 0,
 
   cameraMode: "street",
-  followZoom: 19.1,
+  followZoom: 18.05,
   theme: "satellite",
   showRouteLine: true,
   cleanUiMode: false,
@@ -333,6 +293,8 @@ const el = {
   gearBadge: document.getElementById("gearBadge"),
   rpmBarFill: document.getElementById("rpmBarFill"),
   hudTitle: document.getElementById("hudTitle"),
+  hudChevronStrip: document.getElementById("hudChevronStrip"),
+  racingTurnGate: document.getElementById("racingTurnGate"),
   hudSubtitle: document.getElementById("hudSubtitle"),
   laneForkBar: document.getElementById("laneForkBar"),
 
@@ -938,75 +900,101 @@ function speakSpanish(text, alertKey, contextId = null, chimeStage = null) {
   }
 }
 
-/* ================= MAP INITIALIZATION & REALISTIC LAYERS ================= */
-function ensureChevronImage(map) {
-  if (!map || map.hasImage("route-chevron")) return;
-  const size = 32;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return;
-
-  ctx.clearRect(0, 0, size, size);
-  ctx.lineJoin = "round";
-  ctx.lineCap = "round";
-
-  ctx.strokeStyle = "rgba(3, 24, 11, 0.9)";
-  ctx.lineWidth = 6.2;
+/* ================= MAP INITIALIZATION & RACING CHEVRON LAYERS ================= */
+function drawChevronPath(ctx, yTip, yBase, xCenter, halfW) {
   ctx.beginPath();
-  ctx.moveTo(8, 21);
-  ctx.lineTo(16, 9);
-  ctx.lineTo(24, 21);
+  ctx.moveTo(xCenter - halfW, yBase);
+  ctx.lineTo(xCenter, yTip);
+  ctx.lineTo(xCenter + halfW, yBase);
   ctx.stroke();
-
-  ctx.strokeStyle = "#ffffff";
-  ctx.lineWidth = 3.2;
-  ctx.beginPath();
-  ctx.moveTo(8, 21);
-  ctx.lineTo(16, 9);
-  ctx.lineTo(24, 21);
-  ctx.stroke();
-
-  const imgData = ctx.getImageData(0, 0, size, size);
-  map.addImage("route-chevron", { width: size, height: size, data: imgData.data });
 }
 
-function ensureFacadeTexture(map) {
-  if (!map || map.hasImage("building-facade-tex")) return;
-  const size = 64;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return;
+function ensureChevronImage(map) {
+  if (!map) return;
 
-  // Base translúcida arquitectónica con losas de entrepiso y ventanales realistas
-  ctx.fillStyle = "rgba(30, 41, 59, 0.25)";
-  ctx.fillRect(0, 0, size, size);
+  if (!map.hasImage("route-chevron")) {
+    const size = 64;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.clearRect(0, 0, size, size);
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
 
-  const cols = 4;
-  const rows = 4;
-  const cellW = size / cols;
-  const cellH = size / rows;
+      // Contorno oscuro de alto contraste
+      ctx.strokeStyle = "rgba(2, 22, 18, 0.92)";
+      ctx.lineWidth = 10;
+      drawChevronPath(ctx, 10, 32, 32, 18);
+      drawChevronPath(ctx, 29, 51, 32, 18);
 
-  for (let r = 0; r < rows; r++) {
-    // Losa de concreto horizontal entre pisos
-    ctx.fillStyle = "rgba(226, 232, 240, 0.35)";
-    ctx.fillRect(0, r * cellH, size, 2);
+      // Núcleo neón cian / verde racing
+      ctx.strokeStyle = "#00f5d4";
+      ctx.lineWidth = 5.5;
+      drawChevronPath(ctx, 10, 32, 32, 18);
 
-    for (let c = 0; c < cols; c++) {
-      const warm = (r + c) % 3 === 0;
-      ctx.fillStyle = warm ? "rgba(253, 224, 140, 0.65)" : "rgba(147, 197, 253, 0.52)";
-      ctx.fillRect(c * cellW + 3, r * cellH + 4, cellW - 6, cellH - 7);
-      ctx.strokeStyle = "rgba(15, 23, 42, 0.55)";
-      ctx.lineWidth = 1;
-      ctx.strokeRect(c * cellW + 3, r * cellH + 4, cellW - 6, cellH - 7);
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 4.6;
+      drawChevronPath(ctx, 29, 51, 32, 18);
+
+      const imgData = ctx.getImageData(0, 0, size, size);
+      map.addImage("route-chevron", { width: size, height: size, data: imgData.data });
     }
   }
 
-  const imgData = ctx.getImageData(0, 0, size, size);
-  map.addImage("building-facade-tex", { width: size, height: size, data: imgData.data });
+  if (!map.hasImage("turn-wall-chevron")) {
+    const size = 64;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.clearRect(0, 0, size, size);
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+
+      // Halo oscuro
+      ctx.strokeStyle = "rgba(18, 6, 4, 0.92)";
+      ctx.lineWidth = 9.5;
+      drawChevronPath(ctx, 7, 25, 32, 20);
+      drawChevronPath(ctx, 22, 40, 32, 20);
+      drawChevronPath(ctx, 37, 55, 32, 20);
+
+      // Triple chevron luminoso estilo videojuego de carreras
+      ctx.strokeStyle = "#ff9f0a";
+      ctx.lineWidth = 5.2;
+      drawChevronPath(ctx, 7, 25, 32, 20);
+
+      ctx.strokeStyle = "#ffe600";
+      ctx.lineWidth = 5.2;
+      drawChevronPath(ctx, 22, 40, 32, 20);
+
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 4.5;
+      drawChevronPath(ctx, 37, 55, 32, 20);
+
+      const imgData = ctx.getImageData(0, 0, size, size);
+      map.addImage("turn-wall-chevron", { width: size, height: size, data: imgData.data });
+    }
+  }
+}
+
+function stripMapLabelsAndBuildings(map) {
+  if (!map || typeof map.getStyle !== "function") return;
+  const style = map.getStyle();
+  if (!style || !Array.isArray(style.layers)) return;
+  const keepIds = new Set(["route-arrows-layer", "turn-chevrons-layer"]);
+  for (const layer of style.layers) {
+    if (keepIds.has(layer.id)) continue;
+    if (layer.type === "symbol" || layer.type === "fill-extrusion") {
+      try {
+        map.setLayoutProperty(layer.id, "visibility", "none");
+      } catch {
+        // Ignorar capas sin visibilidad configurable
+      }
+    }
+  }
 }
 
 function initMap() {
@@ -1015,10 +1003,10 @@ function initMap() {
     container: "map",
     style: MAP_STYLES[state.theme],
     center: [-87.185, 14.072],
-    zoom: 19.1,
+    zoom: 18.05,
     maxZoom: 21,
-    pitch: 76,
-    maxPitch: 82,
+    pitch: 62,
+    maxPitch: 78,
     bearing: 0,
     fadeDuration: 0,
     pixelRatio: Math.min((window.devicePixelRatio || 1) * 1.35, 3),
@@ -1049,12 +1037,12 @@ function initMap() {
     if (state.theme === "satellite" && typeof state.map.setSky === "function") {
       try {
         state.map.setSky({
-          "sky-color": "#142c4c",
-          "sky-horizon-blend": 0.45,
-          "horizon-color": "#93c5fd",
-          "horizon-fog-blend": 0.62,
-          "fog-color": "#cbd5e1",
-          "fog-ground-blend": 0.35
+          "sky-color": "#0d1b2e",
+          "sky-horizon-blend": 0.42,
+          "horizon-color": "#64b5f6",
+          "horizon-fog-blend": 0.58,
+          "fog-color": "#b0c4de",
+          "fog-ground-blend": 0.3
         });
       } catch {
         // Sky opcional según soporte WebGL/MapLibre
@@ -1096,128 +1084,20 @@ function ensureRouteLayers() {
   const m = state.map;
   if (!m) return;
 
+  stripMapLabelsAndBuildings(m);
   ensureChevronImage(m);
-  ensureFacadeTexture(m);
 
   const sources = {
-    "procedural-houses-src": { type: "geojson", data: emptyFC() },
     "alt-routes-src": { type: "geojson", data: emptyFC() },
     "avoid-forks-src": { type: "geojson", data: emptyFC() },
     "main-route-src": { type: "geojson", data: emptyFC() },
     "loop-highlight-src": { type: "geojson", data: emptyFC() },
-    "route-arrows-src": { type: "geojson", data: emptyFC() }
+    "route-arrows-src": { type: "geojson", data: emptyFC() },
+    "turn-chevrons-src": { type: "geojson", data: emptyFC() }
   };
 
   for (const [id, spec] of Object.entries(sources)) {
     if (!m.getSource(id)) m.addSource(id, spec);
-  }
-
-  // Casas y edificios 3D procedurales con textura a lo largo de la calle
-  if (!m.getLayer("procedural-houses-3d")) {
-    m.addLayer({
-      id: "procedural-houses-3d",
-      type: "fill-extrusion",
-      source: "procedural-houses-src",
-      minzoom: 14.5,
-      paint: {
-        "fill-extrusion-color": ["get", "color"],
-        "fill-extrusion-height": [
-          "interpolate",
-          ["linear"],
-          ["zoom"],
-          14.5, 0,
-          15.5, ["get", "height"]
-        ],
-        "fill-extrusion-base": 0,
-        "fill-extrusion-vertical-gradient": true,
-        "fill-extrusion-opacity": 0.9
-      }
-    });
-  }
-
-  if (!m.getLayer("procedural-houses-tex")) {
-    try {
-      m.addLayer({
-        id: "procedural-houses-tex",
-        type: "fill-extrusion",
-        source: "procedural-houses-src",
-        minzoom: 15.2,
-        paint: {
-          "fill-extrusion-pattern": "building-facade-tex",
-          "fill-extrusion-height": [
-            "interpolate",
-            ["linear"],
-            ["zoom"],
-            15.2, 0,
-            15.8, ["get", "height"]
-          ],
-          "fill-extrusion-base": 0,
-          "fill-extrusion-opacity": 0.42
-        }
-      });
-    } catch {
-      // Patrón opcional según soporte WebGL
-    }
-  }
-
-  // Edificios reales OSM en estilos claro/oscuro/satélite + capa de ventanas texturizadas
-  if (m.getSource("openmaptiles") && !m.getLayer("buildings-3d") && !m.getLayer("building-3d")) {
-    m.addLayer({
-      id: "buildings-3d",
-      type: "fill-extrusion",
-      source: "openmaptiles",
-      "source-layer": "building",
-      minzoom: 12.5,
-      filter: ["!", ["has", "hide_3d"]],
-      paint: {
-        "fill-extrusion-color": [
-          "interpolate",
-          ["linear"],
-          ["coalesce", ["get", "render_height"], 7],
-          0, "#d97757",
-          8, "#e7d8c5",
-          16, "#cbd5e1",
-          36, "#94a3b8"
-        ],
-        "fill-extrusion-height": [
-          "interpolate",
-          ["linear"],
-          ["zoom"],
-          12.5, 0,
-          14.0, ["max", 6.5, ["*", ["coalesce", ["get", "render_height"], 6.5], 1.45]]
-        ],
-        "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
-        "fill-extrusion-vertical-gradient": true,
-        "fill-extrusion-opacity": 0.88
-      }
-    });
-  }
-
-  if (m.getSource("openmaptiles") && !m.getLayer("buildings-3d-tex")) {
-    try {
-      m.addLayer({
-        id: "buildings-3d-tex",
-        type: "fill-extrusion",
-        source: "openmaptiles",
-        "source-layer": "building",
-        minzoom: 14.8,
-        filter: ["!", ["has", "hide_3d"]],
-        paint: {
-          "fill-extrusion-pattern": "building-facade-tex",
-          "fill-extrusion-height": [
-            "interpolate",
-            ["linear"],
-            ["zoom"],
-            14.8, 0,
-            15.6, ["max", 6.6, ["*", ["coalesce", ["get", "render_height"], 6.5], 1.45]]
-          ],
-          "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
-          "fill-extrusion-opacity": 0.36
-        }
-      });
-    } catch {
-      // Patrón opcional según soporte WebGL
-    }
   }
 
   if (!m.getLayer("alt-routes-layer")) {
@@ -1228,8 +1108,8 @@ function ensureRouteLayers() {
       layout: { "line-join": "round", "line-cap": "round" },
       paint: {
         "line-color": "#ff9f0a",
-        "line-width": 4.5,
-        "line-opacity": 0.72,
+        "line-width": 4.2,
+        "line-opacity": 0.65,
         "line-dasharray": [2, 1.5]
       }
     });
@@ -1271,8 +1151,8 @@ function ensureRouteLayers() {
       source: "main-route-src",
       layout: { "line-join": "round", "line-cap": "round" },
       paint: {
-        "line-color": "#022c16",
-        "line-width": 15,
+        "line-color": "#00382a",
+        "line-width": 16,
         "line-opacity": 0.65,
         "line-blur": 2.4
       }
@@ -1288,7 +1168,7 @@ function ensureRouteLayers() {
       paint: {
         "line-color": "#ffffff",
         "line-width": 9.5,
-        "line-opacity": 0.94
+        "line-opacity": 0.92
       }
     });
   }
@@ -1315,8 +1195,8 @@ function ensureRouteLayers() {
       layout: { "line-join": "round", "line-cap": "round" },
       paint: {
         "line-color": "#ff9f0a",
-        "line-width": 10.5,
-        "line-opacity": 0.6,
+        "line-width": 11,
+        "line-opacity": 0.65,
         "line-blur": 1.8
       }
     });
@@ -1330,7 +1210,7 @@ function ensureRouteLayers() {
       layout: { "line-join": "round", "line-cap": "round" },
       paint: {
         "line-color": "#ff3b30",
-        "line-width": 6.2,
+        "line-width": 6.4,
         "line-opacity": 0.98
       }
     });
@@ -1344,7 +1224,25 @@ function ensureRouteLayers() {
       minzoom: 13.5,
       layout: {
         "icon-image": "route-chevron",
-        "icon-size": ["interpolate", ["linear"], ["zoom"], 13.5, 0.45, 18.5, 0.72],
+        "icon-size": ["interpolate", ["linear"], ["zoom"], 13.5, 0.55, 18.5, 0.92],
+        "icon-rotate": ["get", "bearing"],
+        "icon-rotation-alignment": "map",
+        "icon-pitch-alignment": "map",
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true
+      }
+    });
+  }
+
+  if (!m.getLayer("turn-chevrons-layer")) {
+    m.addLayer({
+      id: "turn-chevrons-layer",
+      type: "symbol",
+      source: "turn-chevrons-src",
+      minzoom: 13.5,
+      layout: {
+        "icon-image": "turn-wall-chevron",
+        "icon-size": ["interpolate", ["linear"], ["zoom"], 13.5, 0.55, 18.5, 0.95],
         "icon-rotate": ["get", "bearing"],
         "icon-rotation-alignment": "map",
         "icon-pitch-alignment": "map",
@@ -1367,7 +1265,8 @@ function applyRouteLineVisibility() {
     "main-route-layer",
     "loop-highlight-halo",
     "loop-highlight-layer",
-    "route-arrows-layer"
+    "route-arrows-layer",
+    "turn-chevrons-layer"
   ]) {
     if (m.getLayer(id)) m.setLayoutProperty(id, "visibility", vis);
   }
@@ -1382,8 +1281,8 @@ function toggleCleanUiMode(force = null) {
   if (el.btnToggleCleanUi) {
     el.btnToggleCleanUi.classList.toggle("active", state.cleanUiMode);
     el.btnToggleCleanUi.innerHTML = state.cleanUiMode
-      ? `<i data-lucide="eye" class="ico-md"></i>`
-      : `<i data-lucide="eye-off" class="ico-md"></i>`;
+      ? `<i data-lucide="minimize-2" class="ico-md"></i>`
+      : `<i data-lucide="maximize-2" class="ico-md"></i>`;
     refreshLucideIcons();
   }
   updateNavigationHUD();
@@ -1790,157 +1689,83 @@ function sliceCoordsByDistance(coords, cum, startM, endM) {
   return out;
 }
 
+function collectTurnGateIntervals(maxD) {
+  const spans = [];
+  for (const cp of state.activeCheckpoints) {
+    const startM = Math.max(0, cp.distAlong - 90);
+    const endM = Math.min(maxD - 10, (cp.endDistAlong || cp.distAlong + 35) + 15);
+    if (endM > startM) spans.push([startM, endM]);
+  }
+  for (const st of state.steps) {
+    const m = st.modifier || "straight";
+    const isTurnStep =
+      st.type === "roundabout" ||
+      st.type === "rotary" ||
+      st.type === "roundabout turn" ||
+      (!m.includes("straight") && st.type !== "depart" && st.type !== "arrive");
+    if (!isTurnStep) continue;
+    const startM = Math.max(0, st.distAlong - 90);
+    const endM = Math.min(maxD - 10, st.distAlong + 30);
+    if (endM > startM) spans.push([startM, endM]);
+  }
+  if (!spans.length) return [];
+  spans.sort((a, b) => a[0] - b[0]);
+  const merged = [spans[0]];
+  for (let i = 1; i < spans.length; i++) {
+    const last = merged[merged.length - 1];
+    if (spans[i][0] <= last[1] + 15) {
+      last[1] = Math.max(last[1], spans[i][1]);
+    } else {
+      merged.push(spans[i]);
+    }
+  }
+  return merged;
+}
+
 function buildRouteArrowChevrons(coords, cum) {
   const features = [];
   const maxD = cum[cum.length - 1] || 0;
   if (maxD < 30) return features;
 
-  let cursor = 35;
-  while (cursor < maxD - 20) {
-    const insideTight = state.activeCheckpoints.some(
-      (c) => (c.kind === "loop270" || c.kind === "hairpin" || c.kind === "roundabout") &&
-        cursor >= c.distAlong - 20 &&
-        cursor <= (c.endDistAlong || c.distAlong + 30) + 15
-    );
-    const stepM = insideTight ? 20 : 85;
-    const sample = sampleRouteAtDistance(cursor);
-    if (sample) {
-      features.push({
-        type: "Feature",
-        properties: { bearing: sample.heading },
-        geometry: { type: "Point", coordinates: sample.coord }
-      });
+  const turnIntervals = collectTurnGateIntervals(maxD);
+  let cursor = 26;
+  while (cursor < maxD - 15) {
+    const insideTurn = turnIntervals.some(([a, b]) => cursor >= a && cursor <= b);
+    if (!insideTurn) {
+      const sample = sampleRouteAtDistance(cursor);
+      if (sample) {
+        features.push({
+          type: "Feature",
+          properties: { bearing: sample.heading },
+          geometry: { type: "Point", coordinates: sample.coord }
+        });
+      }
     }
-    cursor += stepM;
+    cursor += 26;
   }
   return features;
 }
 
-function buildProcedural3dHouses(coords, cum) {
+function buildTurnWallChevrons(coords, cum) {
   const features = [];
   const maxD = cum[cum.length - 1] || 0;
-  if (coords.length < 2 || maxD < 60) return features;
+  if (maxD < 30) return features;
 
-  const stopCoords = (state.stops || [])
-    .map((s) => s?.coord || (Number.isFinite(s?.lng) && Number.isFinite(s?.lat) ? [s.lng, s.lat] : null))
-    .filter(Boolean);
-
-  // Subsample long straight segments so cloverleafs, ramps, and parallel roads keep >= 15 m clearance
-  const checkPts = [];
-  for (let i = 0; i < coords.length; i++) {
-    const a = coords[i];
-    checkPts.push(a);
-    if (i + 1 < coords.length) {
-      const b = coords[i + 1];
-      const segM = haversineMeters(a, b);
-      if (segM > 14) {
-        const parts = Math.min(20, Math.floor(segM / 12));
-        for (let k = 1; k < parts; k++) {
-          const t = k / parts;
-          checkPts.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
-        }
+  const turnIntervals = collectTurnGateIntervals(maxD);
+  for (const [startM, endM] of turnIntervals) {
+    let cursor = startM;
+    while (cursor <= endM && features.length < 1500) {
+      const sample = sampleRouteAtDistance(cursor);
+      if (sample) {
+        features.push({
+          type: "Feature",
+          properties: { bearing: sample.heading },
+          geometry: { type: "Point", coordinates: sample.coord }
+        });
       }
+      cursor += 9;
     }
   }
-
-  const palette = [
-    "#d6cfc2",
-    "#cbd5e1",
-    "#bfa893",
-    "#94a3b8",
-    "#c9b9a6",
-    "#a8b5c2",
-    "#b89f8d",
-    "#adb5bd"
-  ];
-
-  const seeded = (n) => {
-    const x = Math.sin(n * 12.9898 + 78.233) * 43758.5453;
-    return x - Math.floor(x);
-  };
-
-  const hasClearance = (pt, minMeters) => {
-    const lngTol = 0.00024;
-    const latTol = 0.00024;
-    for (let i = 0; i < checkPts.length; i++) {
-      const p = checkPts[i];
-      if (Math.abs(pt[0] - p[0]) > lngTol || Math.abs(pt[1] - p[1]) > latTol) continue;
-      if (haversineMeters(pt, p) < minMeters) return false;
-    }
-    return true;
-  };
-
-  const isInUrbanCorridor = (distM, coord) => {
-    if (distM <= 3000 || distM >= Math.max(0, maxD - 22000)) return true;
-    for (let i = 0; i < stopCoords.length; i++) {
-      const s = stopCoords[i];
-      if (Math.abs(coord[0] - s[0]) < 0.028 && Math.abs(coord[1] - s[1]) < 0.028) {
-        if (haversineMeters(coord, s) <= 2400) return true;
-      }
-    }
-    return false;
-  };
-
-  let idxSeed = 1;
-  let cursor = 25;
-  while (cursor < maxD - 25 && features.length < 550) {
-    const sample = sampleRouteAtDistance(cursor);
-    if (!sample) {
-      cursor += 40;
-      continue;
-    }
-
-    if (!isInUrbanCorridor(cursor, sample.coord)) {
-      cursor += 120;
-      idxSeed += 1;
-      continue;
-    }
-
-    for (const side of [-1, 1]) {
-      if (features.length >= 550) break;
-      idxSeed += 1;
-      const r1 = seeded(idxSeed * 3 + side);
-      const r2 = seeded(idxSeed * 5 + 11);
-      const r3 = seeded(idxSeed * 7 + 19);
-
-      if (r1 < 0.12) continue; // occasional yard/gap between buildings
-
-      const offsetM = 17 + r2 * 9; // 17 m to 26 m off centerline
-      const center = projectPointMeters(sample.coord, sample.heading + side * 90, offsetM);
-      if (!hasClearance(center, 15.0)) continue;
-
-      const isTall = r3 > 0.72;
-      const halfAlongM = isTall ? 5.5 + r1 * 3.5 : 4.0 + r1 * 2.8;
-      const halfAcrossM = isTall ? 4.2 + r2 * 2.5 : 3.2 + r2 * 1.8;
-      const height = isTall ? 12.0 + r3 * 10.0 : 6.0 + r3 * 5.8; // 6.0..22.0 m
-      const color = palette[Math.floor((r1 + r2 + r3) * 100) % palette.length];
-
-      const fwd = sample.heading;
-      const right = sample.heading + 90;
-      const fCenter = projectPointMeters(center, fwd, halfAlongM);
-      const bCenter = projectPointMeters(center, fwd + 180, halfAlongM);
-      const c1 = projectPointMeters(fCenter, right + 180, halfAcrossM);
-      const c2 = projectPointMeters(fCenter, right, halfAcrossM);
-      const c3 = projectPointMeters(bCenter, right, halfAcrossM);
-      const c4 = projectPointMeters(bCenter, right + 180, halfAcrossM);
-
-      features.push({
-        type: "Feature",
-        properties: {
-          height: Number(height.toFixed(1)),
-          base: 0,
-          color
-        },
-        geometry: {
-          type: "Polygon",
-          coordinates: [[c1, c2, c3, c4, c1]]
-        }
-      });
-    }
-
-    cursor += 30;
-  }
-
   return features;
 }
 
@@ -1981,7 +1806,7 @@ function processPrimaryRoute(route) {
 
   analyzeRouteGeometryAndManeuvers(route, coords, cum, flatSteps);
   state.routeArrowFeatures = buildRouteArrowChevrons(coords, cum);
-  state.proceduralHouseFeatures = buildProcedural3dHouses(coords, cum);
+  state.turnChevronFeatures = buildTurnWallChevrons(coords, cum);
 
   el.metricTotalDist.textContent = `${(route.distance / 1000).toFixed(1)} km`;
   el.metricTotalTime.textContent = `${Math.round(route.duration / 60)} min`;
@@ -2076,9 +1901,9 @@ function renderAllMapData() {
   m.getSource("avoid-forks-src")?.setData({ type: "FeatureCollection", features: state.dynamicAvoidFeatures });
   m.getSource("loop-highlight-src")?.setData({ type: "FeatureCollection", features: state.dynamicLoopFeatures });
   m.getSource("route-arrows-src")?.setData({ type: "FeatureCollection", features: state.routeArrowFeatures });
-  m.getSource("procedural-houses-src")?.setData({
+  m.getSource("turn-chevrons-src")?.setData({
     type: "FeatureCollection",
-    features: state.proceduralHouseFeatures || []
+    features: state.turnChevronFeatures || []
   });
 
   state.stopMarkers.forEach((mk) => mk.remove());
@@ -2087,9 +1912,9 @@ function renderAllMapData() {
   activeStops.forEach((s, idx) => {
     const div = document.createElement("div");
     div.className = `stop-marker ${idx === 0 ? "origin" : idx === activeStops.length - 1 ? "final" : ""}`;
-    const icon = idx === 0 ? svgIcon("flag", 12) : svgIcon("map-pin", 12);
-    const label = shortPlaceName(s.name);
-    div.innerHTML = `${icon}<span>${idx === 0 ? label : `${idx}. ${label}`}</span>`;
+    div.title = s.name;
+    const icon = idx === 0 ? svgIcon("flag", 11) : svgIcon("map-pin", 11);
+    div.innerHTML = `${icon}<span>${idx === 0 ? "A" : String(idx)}</span>`;
     const mk = new maplibregl.Marker({ element: div, anchor: "bottom" })
       .setLngLat([s.lng, s.lat])
       .addTo(m);
@@ -2158,6 +1983,7 @@ function resetVehicleToStart() {
   state.bridgeAlertShownAt = 0;
   state.lastSpokenContextId = null;
   state.bankAngleDeg = 0;
+  state.straightCruiseSince = 0;
   el.simScrubber.value = "0";
   state.spokenAlerts.clear();
   cancelSpeech();
@@ -2183,6 +2009,7 @@ function jumpToCheckpoint(cp) {
   state.bridgeAlertShownAt = 0;
   state.lastSpokenContextId = null;
   state.bankAngleDeg = 0;
+  state.straightCruiseSince = 0;
   state.spokenAlerts.delete(`${cp.id}-prep`);
   state.spokenAlerts.delete(`${cp.id}-action`);
 
@@ -2196,7 +2023,7 @@ function jumpToCheckpoint(cp) {
     state.simPlaying = true;
     setPlayButtonUI(true);
     state.cameraMode = "street";
-    state.followZoom = 19.1;
+    state.followZoom = 18.05;
     setCameraButtonUI("street");
     updateNavigationHUD();
     focusCameraOnVehicle(true);
@@ -2216,9 +2043,9 @@ function focusCameraOnVehicle(immediate = false) {
     const opts = {
       center: state.vehiclePos,
       zoom: state.followZoom,
-      pitch: 76,
+      pitch: 62,
       bearing: state.smoothCameraBearing,
-      padding: { top: Math.round(window.innerHeight * 0.36), bottom: 0, left: 0, right: 0 }
+      padding: { top: Math.round(window.innerHeight * 0.28), bottom: 0, left: 0, right: 0 }
     };
     if (immediate) state.map.jumpTo(opts);
     else state.map.easeTo({ ...opts, duration: 180, easing: (t) => t });
@@ -2287,6 +2114,41 @@ function updateRacingTelemetryUI(kmh, isBraking) {
   }
 }
 
+function chevronSvgPath(dir) {
+  if (dir === "left") return `<polyline points="15 18 9 12 15 6"/>`;
+  if (dir === "right") return `<polyline points="9 18 15 12 9 6"/>`;
+  return `<polyline points="6 15 12 9 18 15"/>`;
+}
+
+function updateHudChevronStrip(dir, isBraking) {
+  if (!el.hudChevronStrip) return;
+  el.hudChevronStrip.classList.toggle("brake", Boolean(isBraking));
+  if (el.hudChevronStrip.dataset.dir !== dir) {
+    el.hudChevronStrip.dataset.dir = dir;
+    const pts = chevronSvgPath(dir);
+    const item = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${pts}</svg>`;
+    el.hudChevronStrip.innerHTML = item + item + item;
+  }
+}
+
+function updateRacingTurnGate(dir, showGate, isBraking) {
+  if (!el.racingTurnGate) return;
+  if (!showGate || (dir !== "left" && dir !== "right")) {
+    el.racingTurnGate.classList.add("hidden");
+    return;
+  }
+  el.racingTurnGate.classList.remove("hidden");
+  el.racingTurnGate.classList.toggle("dir-left", dir === "left");
+  el.racingTurnGate.classList.toggle("dir-right", dir === "right");
+  el.racingTurnGate.classList.toggle("brake-gate", Boolean(isBraking));
+  if (el.racingTurnGate.dataset.dir !== dir) {
+    el.racingTurnGate.dataset.dir = dir;
+    const pts = chevronSvgPath(dir);
+    const chev = `<svg viewBox="0 0 24 24" class="gate-chev" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${pts}</svg>`;
+    el.racingTurnGate.innerHTML = chev.repeat(7);
+  }
+}
+
 function updateNavigationHUD() {
   if (!state.vehiclePos || !state.mainCoords.length) return;
 
@@ -2319,7 +2181,7 @@ function updateNavigationHUD() {
 
   el.arrow3d.style.transform = `rotateX(34deg) rotateZ(${arrowAngle.toFixed(1)}deg)`;
 
-  // Buscar checkpoint activo (incluye permanecer activo mientras cruza un bucle 270 o rotonda)
+  // Buscar checkpoint activo (anticipación <= 650 m o dentro del giro)
   let nearestCp = null;
   let nearestCpDelta = Infinity;
   for (const cp of state.activeCheckpoints) {
@@ -2327,7 +2189,7 @@ function updateNavigationHUD() {
     const endDelta = (cp.endDistAlong || cp.distAlong) - curAlong;
     const insideSpan = curAlong >= cp.distAlong - 12 && curAlong <= (cp.endDistAlong || cp.distAlong) + 12;
 
-    if (insideSpan || (entryDelta >= -10 && entryDelta <= 680)) {
+    if (insideSpan || (entryDelta >= -10 && entryDelta <= 650)) {
       if (insideSpan) {
         nearestCp = cp;
         nearestCpDelta = Math.max(0, endDelta);
@@ -2359,64 +2221,52 @@ function updateNavigationHUD() {
 
   const speedMps = Math.max(7, (state.speedKmh || 48) / 3.6);
   const leadCompMeters = speedMps * 0.45;
-  const showLanes = !state.cleanUiMode && (Boolean(nearestCp) || nextStepDist <= 550);
+  const showLanes = !state.cleanUiMode && (Boolean(nearestCp) || nextStepDist <= 450);
   el.laneForkBar.classList.toggle("hidden", !showLanes);
 
-  // Nunca mostrar banners temporales ni ventanas emergentes sobre el mapa
   if (el.bridgeAlert) {
     el.bridgeAlert.classList.add("hidden");
   }
 
+  let activeLane = "center";
+  let isCruiseStraight = false;
+  let showGate = false;
+
   if (nearestCp) {
-    if (state.activeCheckpointId !== nearestCp.id) {
-      state.activeCheckpointId = nearestCp.id;
-    }
+    state.activeCheckpointId = nearestCp.id;
+    state.straightCruiseSince = 0;
+    el.hudCard.classList.remove("hud-auto-hidden");
 
     const isInside = Boolean(nearestCp._currentlyInside);
     const entryDist = Math.max(0, nearestCp.distAlong - curAlong);
     const dispDist = isInside ? Math.max(0, (nearestCp.endDistAlong || nearestCp.distAlong) - curAlong) : entryDist;
 
-    let headline;
-    if (isInside && (nearestCp.kind === "loop270" || nearestCp.kind === "hairpin")) {
-      const dirWord = nearestCp.takeLane === "right" ? "derecha" : "izquierda";
-      headline = `Dentro del bucle (${nearestCp.turnDeg}°): Sigue girando a la ${dirWord} hasta conectar`;
-    } else if (isInside && nearestCp.kind === "roundabout") {
-      headline = nearestCp.actionHeadline;
+    let hudCue;
+    if (nearestCp.kind === "roundabout") {
+      hudCue = nextStep?.exit ? `ROTONDA S${nextStep.exit}` : "ROTONDA";
+    } else if (nearestCp.kind === "loop270") {
+      hudCue = nearestCp.takeLane === "left" ? "BUCLE IZQ" : "BUCLE DER";
+    } else if (nearestCp.kind === "hairpin") {
+      hudCue = nearestCp.takeLane === "left" ? "GIRO IZQ" : "GIRO DER";
     } else {
-      headline = entryDist > 260 ? nearestCp.prepHeadline : nearestCp.actionHeadline;
+      hudCue = nearestCp.takeLane === "left" ? "IZQUIERDA" : "DERECHA";
     }
 
     el.hudCard.classList.add("checkpoint-active");
-    el.checkpointBadge.classList.remove("hidden");
-    const badgeLabel =
-      nearestCp.kind === "roundabout"
-        ? "Rotonda"
-        : nearestCp.kind === "loop270"
-        ? "Bucle 270"
-        : nearestCp.kind === "hairpin"
-        ? "Vuelta Cerrada"
-        : "Desvío";
-    if (el.checkpointBadge.dataset.label !== badgeLabel) {
-      el.checkpointBadge.dataset.label = badgeLabel;
-      el.checkpointBadge.innerHTML = `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><span>${badgeLabel}</span>`;
-    }
+    el.checkpointBadge.classList.add("hidden");
 
     if (nearestCp.recommendedSpeed && nearestCp.recommendedSpeed <= 35) {
-      el.curveSpeedBadge.textContent = `Máx ${nearestCp.recommendedSpeed} km/h`;
+      el.curveSpeedBadge.textContent = String(nearestCp.recommendedSpeed);
       el.curveSpeedBadge.classList.remove("hidden");
     } else {
       el.curveSpeedBadge.classList.add("hidden");
     }
 
     el.hudDistance.textContent = formatDistance(dispDist);
-    el.hudTitle.textContent = headline;
-    el.hudSubtitle.textContent = state.showRouteLine
-      ? isInside
-        ? `${nearestCp.title} · Resta ${formatDistance(dispDist)} del giro`
-        : nearestCp.title
-      : "Vista 3D despejada · Mantente derecho";
-
-    highlightLanes(nearestCp.takeLane, true);
+    el.hudTitle.textContent = hudCue;
+    activeLane = nearestCp.takeLane || "right";
+    showGate = !state.cleanUiMode && (isInside || entryDist <= 280);
+    highlightLanes(activeLane, true);
 
     const effectiveDelta = entryDist - leadCompMeters;
     const prepTrigger = Math.min(580, Math.max(300, speedMps * 9));
@@ -2433,21 +2283,22 @@ function updateNavigationHUD() {
     el.curveSpeedBadge.classList.add("hidden");
 
     el.hudDistance.textContent = formatDistance(nextStepDist);
-    const { lane, label, stage } = mapModifierToSpanish(nextStep, nextStepDist);
-    el.hudTitle.textContent = label;
-    if (!state.showRouteLine) {
-      el.hudSubtitle.textContent = "Vista 3D despejada · Mantente derecho";
-    } else if (stage === "cruise") {
-      el.hudSubtitle.textContent = nextStep?.name
-        ? `Sigue de frente por ${nextStep.name}`
-        : "Sigue de frente por la vía principal";
+    const { lane, stage, cue } = mapModifierToSpanish(nextStep, nextStepDist);
+    el.hudTitle.textContent = cue;
+    activeLane = lane;
+    isCruiseStraight = stage === "cruise" || (cue === "RECTO" && nextStep?.type !== "arrive");
+
+    const nowMs = performance.now();
+    if (isCruiseStraight) {
+      if (!state.straightCruiseSince) state.straightCruiseSince = nowMs;
+      el.hudCard.classList.toggle("hud-auto-hidden", nowMs - state.straightCruiseSince > 1800);
+      el.arrow3d.style.transform = "rotateX(34deg) rotateZ(0deg)";
     } else {
-      el.hudSubtitle.textContent = nextStep?.name ? `Vía: ${nextStep.name}` : "Mantente derecho";
+      state.straightCruiseSince = 0;
+      el.hudCard.classList.remove("hud-auto-hidden");
     }
 
-    if (stage === "cruise") {
-      el.arrow3d.style.transform = "rotateX(34deg) rotateZ(0deg)";
-    }
+    showGate = !state.cleanUiMode && !isCruiseStraight && (lane === "left" || lane === "right") && nextStepDist <= 280;
     highlightLanes(lane, false);
 
     const effectiveStepDist = nextStepDist - leadCompMeters;
@@ -2455,10 +2306,10 @@ function updateNavigationHUD() {
       nextStep &&
       (nextStep.type === "arrive" || (nextStep.modifier && !nextStep.modifier.includes("straight")));
     if (isTurnOrArrive && effectiveStepDist > 12) {
-      const prepStepTrigger = Math.min(520, Math.max(280, speedMps * 8));
+      const prepStepTrigger = Math.min(450, Math.max(260, speedMps * 8));
       const actionStepTrigger = Math.min(180, Math.max(80, speedMps * 3.8));
       if (effectiveStepDist <= prepStepTrigger && effectiveStepDist > actionStepTrigger) {
-        const prepObj = mapModifierToSpanish(nextStep, 400);
+        const prepObj = mapModifierToSpanish(nextStep, 350);
         speakSpanish(prepObj.label, `step-prep-${Math.round(nextStep.distAlong)}`, null, "prep");
       } else if (effectiveStepDist <= actionStepTrigger) {
         const actObj = mapModifierToSpanish(nextStep, 120);
@@ -2466,32 +2317,38 @@ function updateNavigationHUD() {
       }
     }
   }
+
+  updateHudChevronStrip(activeLane, isBrakingZone);
+  updateRacingTurnGate(activeLane, showGate, isBrakingZone);
 }
 
 function mapModifierToSpanish(step, distMeters = Infinity) {
-  if (!step || distMeters > 550) {
-    return { lane: "center", label: "Mantente derecho", stage: "cruise" };
+  if (!step || distMeters > 450) {
+    return { lane: "center", label: "Mantente derecho", stage: "cruise", cue: "RECTO" };
   }
   const m = step.modifier || "straight";
   const street = step.name ? ` hacia ${step.name}` : "";
   if (step.type === "arrive") {
-    return { lane: "center", label: `Llegaste a tu destino${street}`, stage: "action" };
+    return { lane: "center", label: `Llegaste a tu destino${street}`, stage: "action", cue: "META" };
   }
 
   const isRoundabout = step.type === "roundabout" || step.type === "rotary" || step.type === "roundabout turn";
   if (isRoundabout) {
     const exitNum = step.exit || 1;
-    if (distMeters > 240) {
+    const cue = `ROTONDA S${exitNum}`;
+    if (distMeters > 220) {
       return {
         lane: "right",
         label: `Rotonda adelante: Reduce velocidad, salida ${exitNum}${street}`,
-        stage: "prep"
+        stage: "prep",
+        cue
       };
     }
     return {
       lane: "right",
       label: `Entra a la rotonda y toma la salida ${exitNum}${street}`,
-      stage: "action"
+      stage: "action",
+      cue
     };
   }
 
@@ -2499,48 +2356,53 @@ function mapModifierToSpanish(step, distMeters = Infinity) {
   const isLeft = !isUturn && m.includes("left");
   const isRight = m.includes("right");
 
-  if (distMeters > 260) {
+  if (distMeters > 240) {
     if (isUturn) {
       return {
         lane: "left",
         label: "Con anticipación: Ve pasándote al carril izquierdo para el retorno cerrado",
-        stage: "prep"
+        stage: "prep",
+        cue: "RETORNO"
       };
     }
     if (isLeft) {
       return {
         lane: "left",
         label: "Con anticipación: Ve pasándote al carril izquierdo",
-        stage: "prep"
+        stage: "prep",
+        cue: "IZQUIERDA"
       };
     }
     if (isRight) {
       return {
         lane: "right",
         label: "Con anticipación: Ve pasándote al carril derecho",
-        stage: "prep"
+        stage: "prep",
+        cue: "DERECHA"
       };
     }
     return {
       lane: "center",
       label: "Mantente derecho en el carril central",
-      stage: "prep"
+      stage: "cruise",
+      cue: "RECTO"
     };
   }
 
   if (isUturn) {
-    return { lane: "left", label: `Toma el retorno cerrado ahora${street}`, stage: "action" };
+    return { lane: "left", label: `Toma el retorno cerrado ahora${street}`, stage: "action", cue: "RETORNO" };
   }
   if (isLeft) {
-    return { lane: "left", label: `Toma la ruta a la izquierda${street}`, stage: "action" };
+    return { lane: "left", label: `Toma la ruta a la izquierda${street}`, stage: "action", cue: "IZQUIERDA" };
   }
   if (isRight) {
-    return { lane: "right", label: `Toma la ruta a la derecha${street}`, stage: "action" };
+    return { lane: "right", label: `Toma la ruta a la derecha${street}`, stage: "action", cue: "DERECHA" };
   }
   return {
     lane: "center",
     label: step.name ? `Sigue al frente por ${step.name}` : "Sigue al frente",
-    stage: "action"
+    stage: "cruise",
+    cue: "RECTO"
   };
 }
 
@@ -2687,12 +2549,24 @@ function onDeviceCompass(ev) {
 
 /* ================= SQL ROUTE SELECTOR ================= */
 
+function compactRouteBadge(route) {
+  const map = {
+    "ruta-completa": "R0",
+    "ruta-1-san-judas": "R1",
+    "ruta-2-la-reserva": "R2",
+    "ruta-3-comfort-inn": "R3"
+  };
+  if (map[route.id]) return map[route.id];
+  const raw = String(route.short_label || route.name || "SQL").trim();
+  return raw.slice(0, 6).toUpperCase();
+}
+
 function renderLegPills() {
   const routes = sqlGetAllRoutes();
   el.legFilterPills.innerHTML = routes
     .map(
       (r) =>
-        `<button type="button" class="leg-pill ${r.id === state.activeRouteId ? "active" : ""}" data-route-id="${escapeHtml(r.id)}">${escapeHtml(r.short_label)}</button>`
+        `<button type="button" class="leg-pill ${r.id === state.activeRouteId ? "active" : ""}" data-route-id="${escapeHtml(r.id)}" title="${escapeHtml(r.name)}">${escapeHtml(compactRouteBadge(r))}</button>`
     )
     .join("");
 
@@ -2897,7 +2771,7 @@ function bindEvents() {
     state.cameraMode = order[(order.indexOf(state.cameraMode) + 1) % order.length];
     setCameraButtonUI(state.cameraMode);
     if (state.cameraMode === "street") {
-      state.followZoom = 19.1;
+      state.followZoom = 18.05;
       focusCameraOnVehicle(false);
     } else if (state.cameraMode === "aerial") {
       state.followZoom = 16.4;

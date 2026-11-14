@@ -52,28 +52,31 @@
               <i data-lucide="alert-triangle" class="ico-xs"></i>
               DESVÍO
             </span>
-            <span class="ios-pill ios-pill-curve hidden" id="curveSpeedBadge">MÁX 25</span>
           </div>
-          <h1 class="ios-hud-title" id="hudTitle">Calculando ruta…</h1>
-          <p class="ios-hud-subtitle" id="hudSubtitle">Satélite 4K · Modelo 3D</p>
+          <div class="hud-title-row">
+            <h1 class="ios-hud-title" id="hudTitle">RUTA</h1>
+            <span class="ios-pill ios-pill-curve hidden" id="curveSpeedBadge">30</span>
+            <div class="hud-chevron-strip" id="hudChevronStrip" aria-hidden="true"></div>
+          </div>
+          <p class="ios-hud-subtitle" id="hudSubtitle">Satélite 4K</p>
 
-          <!-- Compact 3-Lane Fork Indicator -->
+          <!-- Compact 3-Lane Icon-Only Fork Indicator -->
           <div class="ios-lane-bar" id="laneForkBar">
-            <div class="ios-lane-slot" data-lane="left">
+            <div class="ios-lane-slot" data-lane="left" aria-label="Carril izquierdo">
               <i data-lucide="arrow-up-left" class="ico-sm"></i>
-              <span>Izq</span>
             </div>
-            <div class="ios-lane-slot" data-lane="center">
+            <div class="ios-lane-slot" data-lane="center" aria-label="Seguir recto">
               <i data-lucide="arrow-up" class="ico-sm"></i>
-              <span>Recto</span>
             </div>
-            <div class="ios-lane-slot" data-lane="right">
+            <div class="ios-lane-slot" data-lane="right" aria-label="Carril derecho">
               <i data-lucide="arrow-up-right" class="ico-sm"></i>
-              <span>Der</span>
             </div>
           </div>
         </div>
       </div>
+
+      <!-- Holographic Racing Turn Gate -->
+      <div class="racing-turn-gate hidden" id="racingTurnGate" aria-hidden="true"></div>
 
       <!-- Alert banner kept permanently hidden for distraction-free racing HUD -->
       <div class="ios-bridge-alert hidden" id="bridgeAlert" aria-hidden="true">
@@ -101,8 +104,8 @@
       <button type="button" class="ios-ctrl-btn active" id="btnToggleRouteLine" title="Mostrar u ocultar línea guía" aria-label="Línea guía">
         <i data-lucide="route" class="ico-md"></i>
       </button>
-      <button type="button" class="ios-ctrl-btn" id="btnToggleCleanUi" title="Ocultar controles" aria-label="Ocultar controles">
-        <i data-lucide="eye-off" class="ico-md"></i>
+      <button type="button" class="ios-ctrl-btn" id="btnToggleCleanUi" title="Pantalla limpia" aria-label="Ocultar controles">
+        <i data-lucide="maximize-2" class="ico-md"></i>
       </button>
       <button type="button" class="ios-ctrl-btn active" id="btnToggleCamera" title="Cámara: Calle 3D / Aérea 3D / 2D" aria-label="Cámara">
         <i data-lucide="compass" class="ico-md"></i>
