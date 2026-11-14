@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#090d16" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>NavGame TGU — Flecha 3D y Desvíos Choluteca → Tegucigalpa</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Fullscreen 3D Map Canvas -->
+    <div id="map"></div>
+
+    <!-- Top Video-Game 3D Arrow & Lane Decision HUD -->
+    <header class="hud-top">
+      <div class="hud-card" id="hudCard">
+        <div class="hud-arrow-stage" aria-label="Flecha 3D direccional">
+          <div class="hud-arrow-ring">
+            <div class="hud-arrow-3d" id="arrow3d">
+              <svg viewBox="0 0 120 120" class="arrow-svg">
+                <defs>
+                  <linearGradient id="arrowGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="#6effb8" />
+                    <stop offset="55%" stop-color="#00e676" />
+                    <stop offset="100%" stop-color="#009e52" />
+                  </linearGradient>
+                  <filter id="arrowGlow" x="-30%" y="-30%" width="160%" height="160%">
+                    <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#00ff88" flood-opacity="0.7" />
+                  </filter>
+                </defs>
+                <polygon points="60,8 106,66 78,66 78,112 42,112 42,66 14,66"
+                         fill="url(#arrowGrad)" stroke="#ffffff" stroke-width="4" stroke-linejoin="round"
+                         filter="url(#arrowGlow)" />
+              </svg>
+            </div>
+          </div>
+          <div class="hud-distance-badge" id="hudDistance">-- m</div>
+        </div>
+
+        <div class="hud-instruction-col">
+          <div class="hud-badges-row">
+            <span class="badge badge-status" id="modeBadge">SIMULADOR</span>
+            <span class="badge badge-checkpoint hidden" id="checkpointBadge">PUENTE / DESVÍO</span>
+            <span class="badge badge-speed" id="speedBadge">0 km/h</span>
+          </div>
+          <h1 class="hud-title" id="hudTitle">Calculando ruta Choluteca → Tegucigalpa…</h1>
+          <p class="hud-subtitle" id="hudSubtitle">Cargando los tramos y desvíos de puentes en tiempo real</p>
+
+          <!-- 3-Path / 3-Lane Fork Selector Indicator -->
+          <div class="lane-fork-bar" id="laneForkBar">
+            <div class="lane-slot" data-lane="left">
+              <span class="lane-icon">↖</span>
+              <span class="lane-label">Izquierdo / Retorno</span>
+            </div>
+            <div class="lane-slot" data-lane="center">
+              <span class="lane-icon">⬆</span>
+              <span class="lane-label">Puente / Centro</span>
+            </div>
+            <div class="lane-slot" data-lane="right">
+              <span class="lane-icon">↗</span>
+              <span class="lane-label">Lateral Derecho</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Path Legend & Quick Action Chips -->
+      <div class="hud-toolbar">
+        <div class="legend-pills">
+          <span class="legend-pill legend-green"><i class="dot dot-green"></i> Camino Correcto</span>
+          <span class="legend-pill legend-red"><i class="dot dot-red"></i> Desvío / Retorno NO tomar</span>
+          <span class="legend-pill legend-amber"><i class="dot dot-amber"></i> Ruta Alterna</span>
+        </div>
+        <div class="quick-actions">
+          <button type="button" class="btn-chip" id="btnToggleItinerary" title="Configurar o reordenar destinos">⚙️ Itinerario</button>
+          <button type="button" class="btn-chip" id="btnToggleCamera" title="Cambiar entre cámara 3D y vista general">🎯 3D</button>
+          <button type="button" class="btn-chip" id="btnToggleTheme" title="Cambiar mapa Noche/Día">🌙 Noche</button>
+          <button type="button" class="btn-chip" id="btnToggleVoice" title="Activar o silenciar alertas por voz">🔊 Voz</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Bottom Cockpit: Active Leg Info + Bridge Quick Jump + Live GPS / Simulator Controls -->
+    <footer class="hud-bottom">
+      <!-- Bridge Checkpoint Alert Banner (shown prominently within 800m of bridge) -->
+      <div class="bridge-alert hidden" id="bridgeAlert">
+        <div class="bridge-alert-header">
+          <strong id="bridgeAlertTitle">⚠️ DESVÍO CRÍTICO DE PUENTE</strong>
+          <span id="bridgeAlertDist">a 250 m</span>
+        </div>
+        <div class="bridge-paths-grid" id="bridgePathsGrid"></div>
+      </div>
+
+      <!-- Quick Bridge Jump Pills -->
+      <div class="checkpoint-strip" id="checkpointStrip">
+        <span class="strip-label">Probar puentes:</span>
+        <!-- Populated dynamically by app.js -->
+      </div>
+
+      <!-- Main Control Bar -->
+      <div class="control-deck">
+        <div class="trip-summary">
+          <div class="trip-route-pills" id="legFilterPills">
+            <!-- Populated dynamically -->
+          </div>
+          <div class="trip-metrics" id="tripMetrics">
+            <span>Distancia: <strong id="metricTotalDist">-- km</strong></span>
+            <span>Tiempo est.: <strong id="metricTotalTime">-- min</strong></span>
+            <span>Rutas mostradas: <strong id="metricRoutesCount">1</strong></span>
+          </div>
+        </div>
+
+        <div class="sim-gps-row">
+          <button type="button" class="btn-primary btn-gps" id="btnStartGps">📡 GPS en Vivo</button>
+          <button type="button" class="btn-accent" id="btnPlayPause">▶ Simular Viaje</button>
+          <button type="button" class="btn-secondary" id="btnSimSpeed">1x</button>
+          <input type="range" id="simScrubber" min="0" max="1000" value="0" aria-label="Posición simulada en la ruta" />
+        </div>
+      </div>
+    </footer>
+
+    <!-- Itinerary Configurator Drawer / Modal -->
+    <aside class="modal-backdrop hidden" id="itineraryModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-panel">
+        <div class="modal-header">
+          <div>
+            <h2 id="modalTitle">Configurar y Reordenar Itinerario</h2>
+            <p class="modal-desc">Cambia el orden de tus paradas, usa tu GPS actual o agrega nuevas direcciones en Honduras.</p>
+          </div>
+          <button type="button" class="btn-icon" id="btnCloseModal" aria-label="Cerrar">✕</button>
+        </div>
+
+        <div class="modal-body">
+          <div class="stops-section">
+            <div class="section-head">
+              <h3>Paradas del Viaje</h3>
+              <div class="section-head-actions">
+                <button type="button" class="btn-mini" id="btnUseMyLocation">📍 Usar mi GPS como origen</button>
+                <button type="button" class="btn-mini btn-ghost" id="btnRestoreDefault">↺ Restaurar original</button>
+              </div>
+            </div>
+            <ul class="stops-list" id="stopsList"></ul>
+          </div>
+
+          <div class="add-stop-section">
+            <h3>Agregar Dirección o Destino</h3>
+            <form id="searchForm" class="search-row">
+              <input type="text" id="searchInput" placeholder="Ej: Mall Multiplaza Tegucigalpa, Hospital Escuela…" autocomplete="off" />
+              <button type="submit" class="btn-primary">Buscar</button>
+              <button type="button" class="btn-secondary" id="btnPickOnMap" title="Haz clic en cualquier punto del mapa">📌 Tocar mapa</button>
+            </form>
+            <ul class="search-results" id="searchResults"></ul>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" id="btnCancelModal">Cerrar</button>
+          <button type="button" class="btn-primary" id="btnApplyItinerary">Aplicar y Recalcular Caminos</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Map Pick Mode Toast -->
+    <div class="toast hidden" id="toastMsg"></div>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
