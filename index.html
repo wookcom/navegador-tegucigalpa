@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.12.0/sql-wasm.js"></script>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
@@ -51,6 +52,7 @@
               <i data-lucide="alert-triangle" class="ico-xs"></i>
               Desvío
             </span>
+            <span class="ios-pill ios-pill-curve hidden" id="curveSpeedBadge">Máx 25 km/h</span>
             <span class="ios-pill ios-pill-speed" id="speedBadge">0 km/h</span>
           </div>
           <h1 class="ios-hud-title" id="hudTitle">Calculando ruta…</h1>
@@ -178,8 +180,11 @@
         <div class="ios-sheet-handle"></div>
         <div class="ios-modal-header">
           <div>
-            <h2 id="modalTitle">Itinerario del Viaje</h2>
-            <p class="ios-modal-desc">Reordena tus destinos, usa tu GPS actual o agrega nuevas direcciones.</p>
+            <div class="ios-modal-title-row">
+              <h2 id="modalTitle">Itinerario y Base de Datos SQL</h2>
+              <span class="ios-sql-badge" id="sqlStatusBadge">SQLite · Cargando…</span>
+            </div>
+            <p class="ios-modal-desc">Administra rutas guardadas en SQLite, reordena paradas o agrega nuevas direcciones.</p>
           </div>
           <button type="button" class="ios-close-btn" id="btnCloseModal" aria-label="Cerrar">
             <i data-lucide="x" class="ico-sm"></i>
@@ -187,17 +192,33 @@
         </div>
 
         <div class="ios-modal-body">
+          <div class="ios-sql-section">
+            <div class="ios-section-head">
+              <h3>Rutas guardadas en Base de Datos SQL</h3>
+              <div class="ios-head-actions">
+                <button type="button" class="ios-mini-btn ghost" id="btnRestoreDefault" title="Restaurar rutas iniciales en SQLite">
+                  <i data-lucide="database" class="ico-xs"></i>
+                  <span>Restaurar BD</span>
+                </button>
+              </div>
+            </div>
+            <ul class="ios-sql-routes-list" id="sqlRoutesList"></ul>
+            <div class="sql-save-row">
+              <input type="text" id="sqlRouteNameInput" placeholder="Nombre para guardar ruta en SQL (ej. Casa → Trabajo)…" autocomplete="off" />
+              <button type="button" class="ios-btn ios-btn-green" id="btnSaveNewSqlRoute">
+                <i data-lucide="save" class="ico-sm"></i>
+                <span>Guardar nueva en SQL</span>
+              </button>
+            </div>
+          </div>
+
           <div class="ios-stops-section">
             <div class="ios-section-head">
-              <h3>Paradas</h3>
+              <h3>Paradas de la ruta actual</h3>
               <div class="ios-head-actions">
                 <button type="button" class="ios-mini-btn" id="btnUseMyLocation">
                   <i data-lucide="locate-fixed" class="ico-xs"></i>
                   <span>Mi GPS</span>
-                </button>
-                <button type="button" class="ios-mini-btn ghost" id="btnRestoreDefault">
-                  <i data-lucide="rotate-ccw" class="ico-xs"></i>
-                  <span>Restaurar</span>
                 </button>
               </div>
             </div>
@@ -222,7 +243,7 @@
 
         <div class="ios-modal-footer">
           <button type="button" class="ios-btn ios-btn-glass" id="btnCancelModal">Cancelar</button>
-          <button type="button" class="ios-btn ios-btn-blue" id="btnApplyItinerary">Aplicar ruta</button>
+          <button type="button" class="ios-btn ios-btn-blue" id="btnApplyItinerary">Guardar en SQL y Trazar</button>
         </div>
       </div>
     </aside>

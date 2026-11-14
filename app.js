@@ -1,9 +1,59 @@
 /**
- * NavTGU — Navegador GPS minimalista estilo iOS con vista Satélite Híbrida,
- * flecha 3D direccional y trazado multicamino para desvíos en Tegucigalpa.
+ * NavTGU — Navegador GPS 3D Satelital con Motor SQLite (sql.js),
+ * detección dinámica cero-hardcode de bucles 270°, rotondas y desvíos a desnivel.
  */
 
-const STORAGE_KEY = "navgame_tgu_itinerary_v1";
+const SQLITE_STORAGE_KEY = "navtgu_sqlite_db_v2";
+const FALLBACK_SQL_STORAGE_KEY = "navtgu_sql_fallback_v2";
+
+const INITIAL_SQL_ROUTES_SEED = [
+  {
+    id: "ruta-completa",
+    name: "Ruta Completa: Choluteca → 3 Destinos en Tegucigalpa",
+    short_label: "Completa",
+    category: "preset",
+    is_active: 1,
+    stops: [
+      { name: "Choluteca, Honduras (Salida)", lat: 13.306131, lng: -87.1955618 },
+      { name: "Iglesia San Judas Tadeo (Blvd. Suyapa)", lat: 14.0798587, lng: -87.1569144 },
+      { name: "La Reserva Event Center (Blvd. Santa Cristina, Miraflores)", lat: 14.0744, lng: -87.1927 },
+      { name: "Hotel Comfort Inn (Altos de Miramonte / Mall Las Cascadas)", lat: 14.0759, lng: -87.1994 }
+    ]
+  },
+  {
+    id: "ruta-1-san-judas",
+    name: "Ruta 1: Choluteca → Iglesia San Judas Tadeo",
+    short_label: "R1: San Judas",
+    category: "preset",
+    is_active: 0,
+    stops: [
+      { name: "Choluteca, Honduras (Salida)", lat: 13.306131, lng: -87.1955618 },
+      { name: "Iglesia San Judas Tadeo (Blvd. Suyapa)", lat: 14.0798587, lng: -87.1569144 }
+    ]
+  },
+  {
+    id: "ruta-2-la-reserva",
+    name: "Ruta 2: Iglesia San Judas Tadeo → La Reserva Event Center",
+    short_label: "R2: La Reserva",
+    category: "preset",
+    is_active: 0,
+    stops: [
+      { name: "Iglesia San Judas Tadeo (Blvd. Suyapa)", lat: 14.0798587, lng: -87.1569144 },
+      { name: "La Reserva Event Center (Blvd. Santa Cristina, Miraflores)", lat: 14.0744, lng: -87.1927 }
+    ]
+  },
+  {
+    id: "ruta-3-comfort-inn",
+    name: "Ruta 3: La Reserva Event Center → Hotel Comfort Inn",
+    short_label: "R3: Comfort Inn",
+    category: "preset",
+    is_active: 0,
+    stops: [
+      { name: "La Reserva Event Center (Blvd. Santa Cristina, Miraflores)", lat: 14.0744, lng: -87.1927 },
+      { name: "Hotel Comfort Inn (Altos de Miramonte / Mall Las Cascadas)", lat: 14.0759, lng: -87.1994 }
+    ]
+  }
+];
 
 const SATELLITE_HYBRID_STYLE = {
   version: 8,
@@ -18,7 +68,7 @@ const SATELLITE_HYBRID_STYLE = {
       maxzoom: 18,
       attribution: "Esri, Maxar, Earthstar Geographics"
     },
-    "openmaptiles": {
+    openmaptiles: {
       type: "vector",
       url: "https://tiles.openfreemap.org/planet"
     }
@@ -29,8 +79,8 @@ const SATELLITE_HYBRID_STYLE = {
       type: "raster",
       source: "esri-satellite",
       paint: {
-        "raster-contrast": 0.14,
-        "raster-saturation": 0.08,
+        "raster-contrast": 0.16,
+        "raster-saturation": 0.1,
         "raster-brightness-min": 0.02,
         "raster-fade-duration": 0
       }
@@ -40,26 +90,26 @@ const SATELLITE_HYBRID_STYLE = {
       type: "fill-extrusion",
       source: "openmaptiles",
       "source-layer": "building",
-      minzoom: 13.5,
+      minzoom: 13.2,
       filter: ["!", ["has", "hide_3d"]],
       paint: {
         "fill-extrusion-color": [
           "interpolate",
           ["linear"],
           ["coalesce", ["get", "render_height"], 10],
-          0, "#cbd5e1",
-          15, "#93c5fd",
-          40, "#60a5fa"
+          0, "#e2e8f0",
+          16, "#cbd5e1",
+          42, "#94a3b8"
         ],
         "fill-extrusion-height": [
           "interpolate",
           ["linear"],
           ["zoom"],
-          13.5, 0,
-          14.5, ["coalesce", ["*", ["get", "render_height"], 1.4], 11]
+          13.2, 0,
+          14.4, ["coalesce", ["*", ["get", "render_height"], 1.35], 11]
         ],
         "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
-        "fill-extrusion-opacity": 0.72
+        "fill-extrusion-opacity": 0.82
       }
     },
     {
@@ -126,231 +176,6 @@ const FALLBACK_OSM_STYLE = {
   layers: [{ id: "osm", type: "raster", source: "osm" }]
 };
 
-const DEFAULT_STOPS = [
-  { id: "choluteca", name: "Choluteca, Honduras (Salida)", lat: 13.306131, lng: -87.1955618 },
-  { id: "san-judas", name: "Iglesia San Judas Tadeo (Blvd. Suyapa)", lat: 14.0798587, lng: -87.1569144 },
-  { id: "la-reserva", name: "La Reserva Event Center (Miraflores)", lat: 14.0744, lng: -87.1927 },
-  { id: "comfort-inn", name: "Hotel Comfort Inn (Mall Las Cascadas)", lat: 14.0759, lng: -87.1994 }
-];
-
-/**
- * 5 Desvíos y Puentes Críticos de Tegucigalpa con sus 3 caminos (1 correcto verde + 2 a evitar rojos).
- * Coordenadas alineadas a la geometría real de OpenStreetMap/OSRM en Tegucigalpa.
- */
-const TEGUCIGALPA_CHECKPOINTS = [
-  {
-    id: "cp-loarque",
-    shortLabel: "1. Loarque",
-    title: "Entrada Sur: Rampa al Anillo Periférico",
-    lat: 14.047694,
-    lng: -87.212571,
-    takeLane: "right",
-    prepHeadline: "Prepárate: Ve pasándote al carril derecho antes del puente",
-    actionHeadline: "Ahora: Toma la rampa a la derecha hacia el Anillo (evita retorno izquierdo y puente recto)",
-    paths: [
-      {
-        type: "take",
-        label: "TOMAR: Carril Derecho → Rampa Anillo Periférico (hacia Suyapa/UNAH)",
-        coords: [
-          [-87.211847, 14.045749],
-          [-87.212142, 14.046567],
-          [-87.212571, 14.047694],
-          [-87.212643, 14.048171],
-          [-87.212267, 14.049151],
-          [-87.210202, 14.050296]
-        ]
-      },
-      {
-        type: "avoid",
-        label: "EVITAR: Seguir recto hacia Loarque / Comayagüela",
-        coords: [
-          [-87.212571, 14.047694],
-          [-87.21305, 14.04925],
-          [-87.21365, 14.05185]
-        ]
-      },
-      {
-        type: "avoid",
-        label: "EVITAR: Retorno izquierdo hacia Salida al Sur",
-        coords: [
-          [-87.211847, 14.045749],
-          [-87.21245, 14.04622],
-          [-87.21335, 14.04685],
-          [-87.21275, 14.04515]
-        ]
-      }
-    ]
-  },
-  {
-    id: "cp-suyapa",
-    shortLabel: "2. Suyapa",
-    title: "Anillo → Salida Bulevar Suyapa / San Judas",
-    lat: 14.081797,
-    lng: -87.160378,
-    takeLane: "right",
-    prepHeadline: "3 carriles adelante: Ve pasándote al carril lateral derecho antes del puente",
-    actionHeadline: "Ahora: Toma la calle lateral derecha a Blvd. Suyapa (no subas el puente central)",
-    paths: [
-      {
-        type: "take",
-        label: "TOMAR: Carril Lateral Derecho → Salida a Bulevar Suyapa",
-        coords: [
-          [-87.161672, 14.081376],
-          [-87.160378, 14.081797],
-          [-87.159199, 14.08224],
-          [-87.158667, 14.082033],
-          [-87.158515, 14.081571],
-          [-87.157015, 14.080932]
-        ]
-      },
-      {
-        type: "avoid",
-        label: "EVITAR: Subir puente principal del Anillo (te pasa la salida)",
-        coords: [
-          [-87.160378, 14.081797],
-          [-87.15915, 14.08265],
-          [-87.15785, 14.08365]
-        ]
-      },
-      {
-        type: "avoid",
-        label: "EVITAR: Giro izquierdo hacia Hato de Enmedio",
-        coords: [
-          [-87.158667, 14.082033],
-          [-87.15975, 14.08295],
-          [-87.16105, 14.08325]
-        ]
-      }
-    ]
-  },
-  {
-    id: "cp-ffaa",
-    shortLabel: "3. FF.AA.",
-    title: "Anillo Periférico → Bulevar Fuerzas Armadas",
-    lat: 14.068189,
-    lng: -87.169322,
-    takeLane: "right",
-    prepHeadline: "Prepárate: Ve pasándote al carril derecho antes del paso a desnivel",
-    actionHeadline: "Ahora: Toma la salida a la derecha hacia Fuerzas Armadas (evita el retorno)",
-    paths: [
-      {
-        type: "take",
-        label: "TOMAR: Carril Derecho → Rampa a Blvd. Fuerzas Armadas",
-        coords: [
-          [-87.167489, 14.069806],
-          [-87.169322, 14.068189],
-          [-87.171246, 14.066558],
-          [-87.172488, 14.065968],
-          [-87.174761, 14.069594]
-        ]
-      },
-      {
-        type: "avoid",
-        label: "EVITAR: Seguir recto por Anillo Periférico hacia Las Uvas",
-        coords: [
-          [-87.169322, 14.068189],
-          [-87.17145, 14.06535],
-          [-87.17385, 14.06285]
-        ]
-      },
-      {
-        type: "avoid",
-        label: "EVITAR: Retorno bajo el puente hacia Anillo Norte",
-        coords: [
-          [-87.171964, 14.065935],
-          [-87.17355, 14.06485],
-          [-87.17095, 14.06625]
-        ]
-      }
-    ]
-  },
-  {
-    id: "cp-miraflores",
-    shortLabel: "4. Miraflores",
-    title: "Blvd. FF.AA. → Av. Santa Cristina (La Reserva)",
-    lat: 14.075232,
-    lng: -87.182944,
-    takeLane: "right",
-    prepHeadline: "Atención puente Miraflores: Ve pasándote al carril derecho (no subas el puente)",
-    actionHeadline: "Ahora: Toma la vía derecha bajo el puente hacia Miraflores (evita subir el puente)",
-    paths: [
-      {
-        type: "take",
-        label: "TOMAR: Lateral Derecho → Blvd. Centroamérica y Av. Santa Cristina",
-        coords: [
-          [-87.182369, 14.075255],
-          [-87.182944, 14.075232],
-          [-87.184598, 14.076274],
-          [-87.185039, 14.076917],
-          [-87.185254, 14.079126],
-          [-87.184864, 14.074147],
-          [-87.18707, 14.074224]
-        ]
-      },
-      {
-        type: "avoid",
-        label: "EVITAR: Subir paso elevado de Blvd. FF.AA. (te pasas Miraflores)",
-        coords: [
-          [-87.182944, 14.075232],
-          [-87.18535, 14.07512],
-          [-87.18905, 14.07462]
-        ]
-      },
-      {
-        type: "avoid",
-        label: "EVITAR: Seguir norte hacia Kennedy / Basílica",
-        coords: [
-          [-87.185254, 14.079126],
-          [-87.18615, 14.08125],
-          [-87.18715, 14.08305]
-        ]
-      }
-    ]
-  },
-  {
-    id: "cp-cascadas",
-    shortLabel: "5. Cascadas",
-    title: "Frente a Mall Las Cascadas → Comfort Inn",
-    lat: 14.076467,
-    lng: -87.197374,
-    takeLane: "right",
-    prepHeadline: "3 carriles en Las Cascadas: Ve pasándote al carril derecho antes del puente",
-    actionHeadline: "Ahora: Entra por el lateral derecho a Comfort Inn (no subas el puente ni tomes el retorno)",
-    paths: [
-      {
-        type: "take",
-        label: "TOMAR: Lateral Derecho (abajo) → Entrada Comfort Inn",
-        coords: [
-          [-87.195068, 14.076286],
-          [-87.197374, 14.076467],
-          [-87.198506, 14.076177],
-          [-87.199303, 14.075678],
-          [-87.199417, 14.075891]
-        ]
-      },
-      {
-        type: "avoid",
-        label: "EVITAR: Subir puente elevado (pasa encima del mall sin salida)",
-        coords: [
-          [-87.195068, 14.076286],
-          [-87.19755, 14.07662],
-          [-87.20085, 14.07718],
-          [-87.20355, 14.07765]
-        ]
-      },
-      {
-        type: "avoid",
-        label: "EVITAR: Retorno bajo el puente hacia Bulevar Kuwait",
-        coords: [
-          [-87.198506, 14.076177],
-          [-87.19985, 14.07542],
-          [-87.19865, 14.07478]
-        ]
-      }
-    ]
-  }
-];
-
 /* ================= VECTOR SVG ICON HELPER (CERO EMOJIS) ================= */
 function svgIcon(name, size = 14) {
   const common = `width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"`;
@@ -373,6 +198,8 @@ function svgIcon(name, size = 14) {
       return `<svg ${common}><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>`;
     case "trash":
       return `<svg ${common}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
+    case "rotate-cw":
+      return `<svg ${common}><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>`;
     case "git-fork":
       return `<svg ${common}><circle cx="12" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9v1a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V9"/><path d="M12 12v3"/></svg>`;
     default:
@@ -403,20 +230,28 @@ function roadArrowSvg() {
 
 /* ================= STATE ================= */
 const state = {
-  stops: loadSavedStops(),
+  sqlDb: null,
+  sqlMode: "SQLite WASM",
+  sqlFallbackRoutes: null,
+  activeRouteId: "ruta-completa",
+  stops: [],
   draftStops: [],
-  activeLeg: "all",
+
   routes: [],
   mainCoords: [],
   cumDistances: [],
   steps: [],
   activeCheckpoints: [],
+  dynamicAvoidFeatures: [],
+  dynamicLoopFeatures: [],
+  routeArrowFeatures: [],
   totalDistance: 0,
   totalDuration: 0,
 
   mode: "sim",
   simPlaying: false,
   simSpeed: 1,
+  currentSimKmh: 58,
   simDistMeters: 0,
   lastAlongMeters: 0,
   vehiclePos: null,
@@ -426,9 +261,9 @@ const state = {
   gpsWatchId: null,
   lastFrameTime: 0,
 
-  cameraMode: "street", // "street" = Calle 3D | "aerial" = Aérea 3D | "overview" = 2D Ruta
+  cameraMode: "street",
   followZoom: 18.8,
-  theme: "satellite", // Vista de satélite híbrida por defecto
+  theme: "satellite",
   showRouteLine: true,
   cleanUiMode: false,
   voiceEnabled: true,
@@ -457,6 +292,7 @@ const el = {
   hudDistance: document.getElementById("hudDistance"),
   modeBadge: document.getElementById("modeBadge"),
   checkpointBadge: document.getElementById("checkpointBadge"),
+  curveSpeedBadge: document.getElementById("curveSpeedBadge"),
   speedBadge: document.getElementById("speedBadge"),
   hudTitle: document.getElementById("hudTitle"),
   hudSubtitle: document.getElementById("hudSubtitle"),
@@ -490,6 +326,10 @@ const el = {
   btnZoomOut: document.getElementById("btnZoomOut"),
 
   itineraryModal: document.getElementById("itineraryModal"),
+  sqlStatusBadge: document.getElementById("sqlStatusBadge"),
+  sqlRoutesList: document.getElementById("sqlRoutesList"),
+  sqlRouteNameInput: document.getElementById("sqlRouteNameInput"),
+  btnSaveNewSqlRoute: document.getElementById("btnSaveNewSqlRoute"),
   btnCloseModal: document.getElementById("btnCloseModal"),
   btnCancelModal: document.getElementById("btnCancelModal"),
   btnApplyItinerary: document.getElementById("btnApplyItinerary"),
@@ -530,6 +370,24 @@ function calculateBearing([lng1, lat1], [lng2, lat2]) {
   return (toDeg(Math.atan2(y, x)) + 360) % 360;
 }
 
+function projectPointMeters([lng, lat], bearingDeg, meters) {
+  const R = 6371000;
+  const br = toRad(bearingDeg);
+  const lat1 = toRad(lat);
+  const lon1 = toRad(lng);
+  const dR = meters / R;
+  const lat2 = Math.asin(
+    Math.sin(lat1) * Math.cos(dR) + Math.cos(lat1) * Math.sin(dR) * Math.cos(br)
+  );
+  const lon2 =
+    lon1 +
+    Math.atan2(
+      Math.sin(br) * Math.sin(dR) * Math.cos(lat1),
+      Math.cos(dR) - Math.sin(lat1) * Math.sin(lat2)
+    );
+  return [toDeg(lon2), toDeg(lat2)];
+}
+
 function normalizeAngle(deg) {
   return ((deg + 180) % 360 + 360) % 360 - 180;
 }
@@ -539,13 +397,382 @@ function formatDistance(meters) {
   return `${(meters / 1000).toFixed(1)} km`;
 }
 
-function showToast(msg, ms = 2500) {
+function shortPlaceName(name) {
+  return String(name || "").split("(")[0].split(",")[0].trim() || "Destino";
+}
+
+function escapeHtml(str) {
+  return String(str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function showToast(msg, ms = 2600) {
   el.toastMsg.textContent = msg;
   el.toastMsg.classList.remove("hidden");
   clearTimeout(showToast._timer);
   showToast._timer = setTimeout(() => el.toastMsg.classList.add("hidden"), ms);
 }
 
+/* ================= SQLITE WASM DATABASE ENGINE ================= */
+function uint8ToBase64(bytes) {
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+function base64ToUint8(b64) {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+function initFallbackSqlStore() {
+  try {
+    const raw = localStorage.getItem(FALLBACK_SQL_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length) {
+        state.sqlFallbackRoutes = parsed;
+        return;
+      }
+    }
+  } catch {
+    // Usar semilla inicial si localStorage no tiene respaldo válido
+  }
+  state.sqlFallbackRoutes = structuredClone(INITIAL_SQL_ROUTES_SEED).map((r, i) => ({
+    ...r,
+    created_at: new Date(Date.now() + i * 1000).toISOString()
+  }));
+  persistFallbackStore();
+}
+
+function persistFallbackStore() {
+  if (!state.sqlFallbackRoutes) return;
+  try {
+    localStorage.setItem(FALLBACK_SQL_STORAGE_KEY, JSON.stringify(state.sqlFallbackRoutes));
+  } catch {
+    // Ignorar límite de cuota
+  }
+}
+
+function persistSqlDatabase() {
+  if (state.sqlDb) {
+    try {
+      const data = state.sqlDb.export();
+      localStorage.setItem(SQLITE_STORAGE_KEY, uint8ToBase64(data));
+    } catch {
+      // Ignorar límite de cuota
+    }
+  } else {
+    persistFallbackStore();
+  }
+}
+
+function createSqlSchema(db) {
+  db.run("PRAGMA foreign_keys = ON;");
+  db.run(`
+    CREATE TABLE IF NOT EXISTS routes (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      short_label TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'custom',
+      is_active INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS route_stops (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      route_id TEXT NOT NULL,
+      stop_order INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      lat REAL NOT NULL,
+      lng REAL NOT NULL,
+      FOREIGN KEY (route_id) REFERENCES routes(id) ON DELETE CASCADE
+    );
+  `);
+}
+
+function seedInitialRoutesSql(db) {
+  db.run("BEGIN TRANSACTION;");
+  try {
+    const insertRoute = db.prepare(
+      "INSERT INTO routes (id, name, short_label, category, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?);"
+    );
+    const insertStop = db.prepare(
+      "INSERT INTO route_stops (route_id, stop_order, name, lat, lng) VALUES (?, ?, ?, ?, ?);"
+    );
+
+    const baseTime = Date.now();
+    INITIAL_SQL_ROUTES_SEED.forEach((route, rIdx) => {
+      const createdAt = new Date(baseTime + rIdx * 1000).toISOString();
+      insertRoute.run([
+        route.id,
+        route.name,
+        route.short_label,
+        route.category,
+        route.is_active ? 1 : 0,
+        createdAt
+      ]);
+      route.stops.forEach((st, sIdx) => {
+        insertStop.run([route.id, sIdx, st.name, st.lat, st.lng]);
+      });
+    });
+
+    insertRoute.free();
+    insertStop.free();
+    db.run("COMMIT;");
+  } catch (err) {
+    db.run("ROLLBACK;");
+    throw err;
+  }
+  persistSqlDatabase();
+}
+
+async function initSqlDatabase() {
+  if (typeof window.initSqlJs !== "function") {
+    state.sqlMode = "Respaldo SQL Local";
+    initFallbackSqlStore();
+    return;
+  }
+
+  try {
+    const SQL = await window.initSqlJs({
+      locateFile: (file) => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.12.0/${file}`
+    });
+
+    let db = null;
+    const savedB64 = localStorage.getItem(SQLITE_STORAGE_KEY);
+    if (savedB64) {
+      try {
+        db = new SQL.Database(base64ToUint8(savedB64));
+      } catch {
+        db = null;
+      }
+    }
+    if (!db) {
+      db = new SQL.Database();
+    }
+
+    createSqlSchema(db);
+    state.sqlDb = db;
+    state.sqlMode = "SQLite WASM";
+
+    const countRes = db.exec("SELECT COUNT(*) FROM routes;");
+    const total = countRes?.[0]?.values?.[0]?.[0] ?? 0;
+    if (total === 0) {
+      seedInitialRoutesSql(db);
+    }
+  } catch {
+    state.sqlDb = null;
+    state.sqlMode = "Respaldo SQL Local";
+    initFallbackSqlStore();
+  }
+}
+
+function sqlQueryRows(sql, params = []) {
+  const stmt = state.sqlDb.prepare(sql);
+  try {
+    stmt.bind(params);
+    const rows = [];
+    while (stmt.step()) {
+      rows.push(stmt.getAsObject());
+    }
+    return rows;
+  } finally {
+    stmt.free();
+  }
+}
+
+function sqlGetAllRoutes() {
+  if (state.sqlDb) {
+    return sqlQueryRows(`
+      SELECT r.id, r.name, r.short_label, r.category, r.is_active, r.created_at,
+             COUNT(s.id) AS stop_count
+      FROM routes r
+      LEFT JOIN route_stops s ON s.route_id = r.id
+      GROUP BY r.id
+      ORDER BY CASE WHEN r.category = 'preset' THEN 0 ELSE 1 END, r.created_at ASC;
+    `);
+  }
+  return (state.sqlFallbackRoutes || []).map((r) => ({
+    id: r.id,
+    name: r.name,
+    short_label: r.short_label,
+    category: r.category,
+    is_active: r.is_active ? 1 : 0,
+    created_at: r.created_at,
+    stop_count: r.stops.length
+  }));
+}
+
+function sqlGetRouteStops(routeId) {
+  if (state.sqlDb) {
+    return sqlQueryRows(
+      `SELECT stop_order, name, lat, lng FROM route_stops WHERE route_id = ? ORDER BY stop_order ASC;`,
+      [routeId]
+    ).map((row) => ({
+      id: `stop-${row.stop_order}-${Math.round(row.lat * 10000)}`,
+      name: row.name,
+      lat: Number(row.lat),
+      lng: Number(row.lng)
+    }));
+  }
+  const found = (state.sqlFallbackRoutes || []).find((r) => r.id === routeId);
+  return found ? structuredClone(found.stops) : [];
+}
+
+function sqlSetActiveRoute(routeId) {
+  if (state.sqlDb) {
+    state.sqlDb.run("BEGIN TRANSACTION;");
+    try {
+      state.sqlDb.run("UPDATE routes SET is_active = 0;");
+      state.sqlDb.run("UPDATE routes SET is_active = 1 WHERE id = ?;", [routeId]);
+      state.sqlDb.run("COMMIT;");
+    } catch (err) {
+      state.sqlDb.run("ROLLBACK;");
+      throw err;
+    }
+    persistSqlDatabase();
+  } else if (state.sqlFallbackRoutes) {
+    state.sqlFallbackRoutes.forEach((r) => {
+      r.is_active = r.id === routeId ? 1 : 0;
+    });
+    persistFallbackStore();
+  }
+  state.activeRouteId = routeId;
+}
+
+function sqlSaveRoute({ id, name, shortLabel, category = "custom", stops, makeActive = true }) {
+  const routeId = id || `ruta-${Date.now()}`;
+  const cleanName = String(name || "").trim() || `${shortPlaceName(stops[0]?.name)} → ${shortPlaceName(stops[stops.length - 1]?.name)}`;
+  const cleanShort = String(shortLabel || "").trim() || (cleanName.length > 18 ? `${cleanName.slice(0, 16)}…` : cleanName);
+  const nowIso = new Date().toISOString();
+
+  if (state.sqlDb) {
+    const existing = sqlQueryRows("SELECT id, category, created_at FROM routes WHERE id = ?;", [routeId]);
+    state.sqlDb.run("BEGIN TRANSACTION;");
+    try {
+      if (makeActive) {
+        state.sqlDb.run("UPDATE routes SET is_active = 0;");
+      }
+      if (existing.length) {
+        state.sqlDb.run(
+          "UPDATE routes SET name = ?, short_label = ?, is_active = ? WHERE id = ?;",
+          [cleanName, cleanShort, makeActive ? 1 : 0, routeId]
+        );
+        state.sqlDb.run("DELETE FROM route_stops WHERE route_id = ?;", [routeId]);
+      } else {
+        state.sqlDb.run(
+          "INSERT INTO routes (id, name, short_label, category, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?);",
+          [routeId, cleanName, cleanShort, category, makeActive ? 1 : 0, nowIso]
+        );
+      }
+
+      const stmtStop = state.sqlDb.prepare(
+        "INSERT INTO route_stops (route_id, stop_order, name, lat, lng) VALUES (?, ?, ?, ?, ?);"
+      );
+      stops.forEach((st, idx) => {
+        stmtStop.run([routeId, idx, st.name, Number(st.lat), Number(st.lng)]);
+      });
+      stmtStop.free();
+      state.sqlDb.run("COMMIT;");
+    } catch (err) {
+      state.sqlDb.run("ROLLBACK;");
+      throw err;
+    }
+    persistSqlDatabase();
+  } else {
+    const list = state.sqlFallbackRoutes || [];
+    if (makeActive) list.forEach((r) => (r.is_active = 0));
+    const idx = list.findIndex((r) => r.id === routeId);
+    const entry = {
+      id: routeId,
+      name: cleanName,
+      short_label: cleanShort,
+      category: idx >= 0 ? list[idx].category : category,
+      is_active: makeActive ? 1 : 0,
+      created_at: idx >= 0 ? list[idx].created_at : nowIso,
+      stops: structuredClone(stops)
+    };
+    if (idx >= 0) list[idx] = entry;
+    else list.push(entry);
+    persistFallbackStore();
+  }
+
+  if (makeActive) state.activeRouteId = routeId;
+  return routeId;
+}
+
+function sqlDeleteRoute(routeId) {
+  const all = sqlGetAllRoutes();
+  if (all.length <= 1) {
+    showToast("Debe permanecer al menos 1 ruta en la base SQL");
+    return false;
+  }
+
+  if (state.sqlDb) {
+    state.sqlDb.run("BEGIN TRANSACTION;");
+    try {
+      state.sqlDb.run("DELETE FROM route_stops WHERE route_id = ?;", [routeId]);
+      state.sqlDb.run("DELETE FROM routes WHERE id = ?;", [routeId]);
+      state.sqlDb.run("COMMIT;");
+    } catch (err) {
+      state.sqlDb.run("ROLLBACK;");
+      throw err;
+    }
+    persistSqlDatabase();
+  } else if (state.sqlFallbackRoutes) {
+    state.sqlFallbackRoutes = state.sqlFallbackRoutes.filter((r) => r.id !== routeId);
+    persistFallbackStore();
+  }
+
+  if (state.activeRouteId === routeId) {
+    const remaining = sqlGetAllRoutes();
+    if (remaining.length) {
+      sqlSetActiveRoute(remaining[0].id);
+    }
+  }
+  return true;
+}
+
+function sqlRestoreDefaultRoutes() {
+  if (state.sqlDb) {
+    state.sqlDb.run("DELETE FROM route_stops;");
+    state.sqlDb.run("DELETE FROM routes;");
+    seedInitialRoutesSql(state.sqlDb);
+  } else {
+    localStorage.removeItem(FALLBACK_SQL_STORAGE_KEY);
+    initFallbackSqlStore();
+  }
+  state.activeRouteId = INITIAL_SQL_ROUTES_SEED[0].id;
+}
+
+function loadActiveRouteFromSql() {
+  const routes = sqlGetAllRoutes();
+  const active = routes.find((r) => Number(r.is_active) === 1) || routes[0];
+  if (active) {
+    state.activeRouteId = active.id;
+    state.stops = sqlGetRouteStops(active.id);
+  }
+  updateSqlStatusBadge();
+}
+
+function updateSqlStatusBadge() {
+  if (!el.sqlStatusBadge) return;
+  const routes = sqlGetAllRoutes();
+  const totalStops = routes.reduce((acc, r) => acc + Number(r.stop_count || 0), 0);
+  el.sqlStatusBadge.textContent = `${state.sqlMode} · ${routes.length} rutas · ${totalStops} paradas`;
+}
+
+/* ================= VOICE ENGINE (ZERO LAG & NATURAL SPANISH) ================= */
 function selectBestSpanishVoice() {
   if (!("speechSynthesis" in window)) return null;
   const voices = window.speechSynthesis.getVoices() || [];
@@ -650,7 +877,7 @@ function cancelSpeech() {
     try {
       window.speechSynthesis.cancel();
     } catch {
-      // Ignorar si no está disponible
+      // Ignorar
     }
   }
 }
@@ -676,29 +903,40 @@ function speakSpanish(text, alertKey, contextId = null, chimeStage = null) {
   }
 }
 
-/* ================= STORAGE ================= */
-function loadSavedStops() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length >= 2) return parsed;
-    }
-  } catch {
-    // Fallback al itinerario por defecto
-  }
-  return structuredClone(DEFAULT_STOPS);
+/* ================= MAP INITIALIZATION & REALISTIC LAYERS ================= */
+function ensureChevronImage(map) {
+  if (!map || map.hasImage("route-chevron")) return;
+  const size = 32;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  ctx.clearRect(0, 0, size, size);
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+
+  ctx.strokeStyle = "rgba(3, 24, 11, 0.9)";
+  ctx.lineWidth = 6.2;
+  ctx.beginPath();
+  ctx.moveTo(8, 21);
+  ctx.lineTo(16, 9);
+  ctx.lineTo(24, 21);
+  ctx.stroke();
+
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 3.2;
+  ctx.beginPath();
+  ctx.moveTo(8, 21);
+  ctx.lineTo(16, 9);
+  ctx.lineTo(24, 21);
+  ctx.stroke();
+
+  const imgData = ctx.getImageData(0, 0, size, size);
+  map.addImage("route-chevron", { width: size, height: size, data: imgData.data });
 }
 
-function saveStops(stops) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(stops));
-  } catch {
-    // Ignorar sin cuota
-  }
-}
-
-/* ================= MAP INITIALIZATION ================= */
 function initMap() {
   let fallbackApplied = false;
   state.map = new maplibregl.Map({
@@ -724,6 +962,20 @@ function initMap() {
 
   state.map.on("style.load", () => {
     state.mapReady = true;
+    if (state.theme === "satellite" && typeof state.map.setSky === "function") {
+      try {
+        state.map.setSky({
+          "sky-color": "#1a365d",
+          "sky-horizon-blend": 0.45,
+          "horizon-color": "#93c5fd",
+          "horizon-fog-blend": 0.6,
+          "fog-color": "#cbd5e1",
+          "fog-ground-blend": 0.3
+        });
+      } catch {
+        // Sky opcional según soporte WebGL/MapLibre
+      }
+    }
     ensureRouteLayers();
     renderAllMapData();
     applyRouteLineVisibility();
@@ -769,32 +1021,34 @@ function ensureRouteLayers() {
   const m = state.map;
   if (!m) return;
 
+  ensureChevronImage(m);
+
   if (m.getSource("openmaptiles") && !m.getLayer("buildings-3d") && !m.getLayer("building-3d")) {
     m.addLayer({
       id: "buildings-3d",
       type: "fill-extrusion",
       source: "openmaptiles",
       "source-layer": "building",
-      minzoom: 13.5,
+      minzoom: 13.2,
       filter: ["!", ["has", "hide_3d"]],
       paint: {
         "fill-extrusion-color": [
           "interpolate",
           ["linear"],
           ["coalesce", ["get", "render_height"], 10],
-          0, "#cbd5e1",
-          15, "#93c5fd",
-          40, "#60a5fa"
+          0, "#e2e8f0",
+          16, "#cbd5e1",
+          42, "#94a3b8"
         ],
         "fill-extrusion-height": [
           "interpolate",
           ["linear"],
           ["zoom"],
-          13.5, 0,
-          14.5, ["coalesce", ["*", ["get", "render_height"], 1.4], 11]
+          13.2, 0,
+          14.4, ["coalesce", ["*", ["get", "render_height"], 1.35], 11]
         ],
         "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
-        "fill-extrusion-opacity": 0.72
+        "fill-extrusion-opacity": 0.82
       }
     });
   }
@@ -802,15 +1056,15 @@ function ensureRouteLayers() {
   const sources = {
     "alt-routes-src": { type: "geojson", data: emptyFC() },
     "avoid-forks-src": { type: "geojson", data: emptyFC() },
-    "take-forks-src": { type: "geojson", data: emptyFC() },
-    "main-route-src": { type: "geojson", data: emptyFC() }
+    "main-route-src": { type: "geojson", data: emptyFC() },
+    "loop-highlight-src": { type: "geojson", data: emptyFC() },
+    "route-arrows-src": { type: "geojson", data: emptyFC() }
   };
 
   for (const [id, spec] of Object.entries(sources)) {
     if (!m.getSource(id)) m.addSource(id, spec);
   }
 
-  // Rutas alternativas OSRM
   if (!m.getLayer("alt-routes-layer")) {
     m.addLayer({
       id: "alt-routes-layer",
@@ -819,14 +1073,13 @@ function ensureRouteLayers() {
       layout: { "line-join": "round", "line-cap": "round" },
       paint: {
         "line-color": "#ff9f0a",
-        "line-width": 5.5,
-        "line-opacity": 0.85,
+        "line-width": 5,
+        "line-opacity": 0.82,
         "line-dasharray": [2, 1.5]
       }
     });
   }
 
-  // Halo de contraste para caminos rojos sobre satélite
   if (!m.getLayer("avoid-forks-casing")) {
     m.addLayer({
       id: "avoid-forks-casing",
@@ -835,13 +1088,12 @@ function ensureRouteLayers() {
       layout: { "line-join": "round", "line-cap": "round" },
       paint: {
         "line-color": "#1a0608",
-        "line-width": 10,
+        "line-width": 9,
         "line-opacity": 0.65
       }
     });
   }
 
-  // Caminos / Retornos a evitar en rojo Apple
   if (!m.getLayer("avoid-forks-layer")) {
     m.addLayer({
       id: "avoid-forks-layer",
@@ -850,14 +1102,28 @@ function ensureRouteLayers() {
       layout: { "line-join": "round", "line-cap": "round" },
       paint: {
         "line-color": "#ff453a",
-        "line-width": 6.5,
+        "line-width": 5.5,
         "line-opacity": 0.95,
-        "line-dasharray": [1.6, 1.4]
+        "line-dasharray": [1.5, 1.2]
       }
     });
   }
 
-  // Casing oscuro/blanco para contraste sobre imagen satelital
+  if (!m.getLayer("main-route-glow")) {
+    m.addLayer({
+      id: "main-route-glow",
+      type: "line",
+      source: "main-route-src",
+      layout: { "line-join": "round", "line-cap": "round" },
+      paint: {
+        "line-color": "#03180b",
+        "line-width": 14,
+        "line-opacity": 0.58,
+        "line-blur": 2.2
+      }
+    });
+  }
+
   if (!m.getLayer("main-route-casing")) {
     m.addLayer({
       id: "main-route-casing",
@@ -866,13 +1132,12 @@ function ensureRouteLayers() {
       layout: { "line-join": "round", "line-cap": "round" },
       paint: {
         "line-color": "#ffffff",
-        "line-width": 10.5,
-        "line-opacity": 0.88
+        "line-width": 9.5,
+        "line-opacity": 0.92
       }
     });
   }
 
-  // Ruta correcta en verde Apple
   if (!m.getLayer("main-route-layer")) {
     m.addLayer({
       id: "main-route-layer",
@@ -881,46 +1146,66 @@ function ensureRouteLayers() {
       layout: { "line-join": "round", "line-cap": "round" },
       paint: {
         "line-color": "#30d158",
-        "line-width": 6.5,
+        "line-width": 6,
         "line-opacity": 1
       }
     });
   }
 
-  // Refuerzo en ramas de puente
-  if (!m.getLayer("take-forks-layer")) {
+  if (!m.getLayer("loop-highlight-layer")) {
     m.addLayer({
-      id: "take-forks-layer",
+      id: "loop-highlight-layer",
       type: "line",
-      source: "take-forks-src",
+      source: "loop-highlight-src",
       layout: { "line-join": "round", "line-cap": "round" },
       paint: {
-        "line-color": "#64ff9b",
-        "line-width": 7,
-        "line-opacity": 0.95
+        "line-color": "#5efce8",
+        "line-width": 4.2,
+        "line-opacity": 0.96
       }
     });
   }
 
-  m.on("click", "avoid-forks-layer", (e) => {
-    const label = e.features?.[0]?.properties?.label;
-    if (label) {
-      new maplibregl.Popup()
-        .setLngLat(e.lngLat)
-        .setHTML(`<strong style="color:#ff453a">${label}</strong>`)
-        .addTo(m);
-    }
-  });
+  if (!m.getLayer("route-arrows-layer")) {
+    m.addLayer({
+      id: "route-arrows-layer",
+      type: "symbol",
+      source: "route-arrows-src",
+      minzoom: 13.5,
+      layout: {
+        "icon-image": "route-chevron",
+        "icon-size": ["interpolate", ["linear"], ["zoom"], 13.5, 0.45, 18.5, 0.72],
+        "icon-rotate": ["get", "bearing"],
+        "icon-rotation-alignment": "map",
+        "icon-pitch-alignment": "map",
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true
+      }
+    });
+  }
 
-  m.on("click", "alt-routes-layer", (e) => {
-    const label = e.features?.[0]?.properties?.label;
-    if (label) {
-      new maplibregl.Popup()
-        .setLngLat(e.lngLat)
-        .setHTML(`<strong style="color:#ff9f0a">${label}</strong>`)
-        .addTo(m);
-    }
-  });
+  if (!m._navTguClickBound) {
+    m._navTguClickBound = true;
+    m.on("click", "avoid-forks-layer", (e) => {
+      const label = e.features?.[0]?.properties?.label;
+      if (label) {
+        new maplibregl.Popup()
+          .setLngLat(e.lngLat)
+          .setHTML(`<strong style="color:#ff453a">${escapeHtml(label)}</strong>`)
+          .addTo(m);
+      }
+    });
+
+    m.on("click", "alt-routes-layer", (e) => {
+      const label = e.features?.[0]?.properties?.label;
+      if (label) {
+        new maplibregl.Popup()
+          .setLngLat(e.lngLat)
+          .setHTML(`<strong style="color:#ff9f0a">${escapeHtml(label)}</strong>`)
+          .addTo(m);
+      }
+    });
+  }
 
   applyRouteLineVisibility();
 }
@@ -929,7 +1214,13 @@ function applyRouteLineVisibility() {
   const m = state.map;
   if (!m || !state.mapReady) return;
   const vis = state.showRouteLine ? "visible" : "none";
-  for (const id of ["main-route-casing", "main-route-layer", "take-forks-layer"]) {
+  for (const id of [
+    "main-route-glow",
+    "main-route-casing",
+    "main-route-layer",
+    "loop-highlight-layer",
+    "route-arrows-layer"
+  ]) {
     if (m.getLayer(id)) m.setLayoutProperty(id, "visibility", vis);
   }
 }
@@ -954,22 +1245,13 @@ function emptyFC() {
   return { type: "FeatureCollection", features: [] };
 }
 
-/* ================= OSRM ROUTING ================= */
-function getActiveStops() {
-  if (state.activeLeg === "all") return state.stops;
-  const idx = Number(state.activeLeg);
-  if (Number.isInteger(idx) && state.stops[idx] && state.stops[idx + 1]) {
-    return [state.stops[idx], state.stops[idx + 1]];
-  }
-  return state.stops;
-}
-
+/* ================= ZERO-HARDCODE OSRM ROUTING & GEOMETRY ANALYZER ================= */
 async function fetchAndBuildRoutes() {
-  const activeStops = getActiveStops();
-  if (activeStops.length < 2) return;
+  const activeStops = state.stops;
+  if (!activeStops || activeStops.length < 2) return;
 
   el.hudTitle.textContent = "Calculando ruta satelital…";
-  el.hudSubtitle.textContent = "Consultando caminos y desvíos en tiempo real";
+  el.hudSubtitle.textContent = "Analizando geometría, rotondas, bucles y desvíos";
 
   const coordStr = activeStops.map((s) => `${s.lng},${s.lat}`).join(";");
   const url = `https://router.project-osrm.org/route/v1/driving/${coordStr}?overview=full&steps=true&alternatives=3&geometries=geojson`;
@@ -993,7 +1275,7 @@ async function fetchAndBuildRoutes() {
           state.routes.push(...altData.routes.slice(1));
         }
       } catch {
-        // Opcional si no hay rutas alternas en OSRM
+        // Rutas alternativas opcionales
       }
     }
 
@@ -1004,6 +1286,386 @@ async function fetchAndBuildRoutes() {
     el.hudTitle.textContent = "Error al consultar ruta";
     el.hudSubtitle.textContent = "Verifica tu conexión para recargar";
   }
+}
+
+function buildAvoidStubsForIntersection(inter, roadName) {
+  if (!inter || !Array.isArray(inter.bearings) || !Array.isArray(inter.location)) return [];
+  const stubs = [];
+  const origin = inter.location;
+  const outBearing = typeof inter.out === "number" ? inter.bearings[inter.out] : null;
+  const entries = Array.isArray(inter.entry) ? inter.entry : null;
+
+  inter.bearings.forEach((bearingDeg, bIdx) => {
+    if (bIdx === inter.in || bIdx === inter.out) return;
+    if (entries && entries[bIdx] === false) return;
+    const diffOut = outBearing !== null ? Math.abs(normalizeAngle(bearingDeg - outBearing)) : 90;
+    if (diffOut < 14) return;
+    const tip = projectPointMeters(origin, bearingDeg, 30);
+    const dirLabel = normalizeAngle(bearingDeg - (outBearing ?? bearingDeg)) >= 0 ? "derecha" : "izquierda";
+    stubs.push({
+      label: `EVITAR desvío a ${dirLabel}${roadName ? ` (${roadName})` : ""}`,
+      coords: [origin, tip]
+    });
+  });
+
+  return stubs;
+}
+
+function detectLoopsAndHairpinsFromGeometry(coords, cum) {
+  if (coords.length < 5) return [];
+
+  // Filtrar vértices muy juntos (< 4 m) para evitar ruido angular de GPS/OSM
+  const cleaned = [{ idx: 0, coord: coords[0], dist: cum[0] }];
+  for (let i = 1; i < coords.length; i++) {
+    const prev = cleaned[cleaned.length - 1];
+    if (cum[i] - prev.dist >= 4 || i === coords.length - 1) {
+      cleaned.push({ idx: i, coord: coords[i], dist: cum[i] });
+    }
+  }
+  if (cleaned.length < 4) return [];
+
+  const segBearings = [];
+  for (let k = 0; k < cleaned.length - 1; k++) {
+    segBearings.push(calculateBearing(cleaned[k].coord, cleaned[k + 1].coord));
+  }
+
+  const detected = [];
+  let i = 0;
+  while (i < segBearings.length - 2) {
+    let netAngle = 0;
+    let maxAbsAngle = 0;
+    let peakJ = i;
+    let dominantSign = 0;
+    let endScan = i;
+
+    for (let j = i + 1; j < segBearings.length; j++) {
+      const spanDist = cleaned[j + 1].dist - cleaned[i].dist;
+      if (spanDist > 340) break;
+
+      const dAng = normalizeAngle(segBearings[j] - segBearings[j - 1]);
+      if (dominantSign === 0 && Math.abs(dAng) >= 6) {
+        dominantSign = Math.sign(dAng);
+      }
+
+      // Si hay un giro sostenido en dirección opuesta superior a 45°, termina la curva actual
+      if (dominantSign !== 0 && dAng * dominantSign < -45) break;
+
+      netAngle += dAng;
+      if (Math.abs(netAngle) > maxAbsAngle) {
+        maxAbsAngle = Math.abs(netAngle);
+        peakJ = j;
+      }
+      endScan = j;
+    }
+
+    if (maxAbsAngle >= 155) {
+      // Recortar segmentos casi rectos del inicio y fin para encajar exacto en el bucle
+      let sK = i;
+      while (sK < peakJ - 1) {
+        const dStart = Math.abs(normalizeAngle(segBearings[sK + 1] - segBearings[sK]));
+        if (dStart >= 7) break;
+        sK++;
+      }
+      let eK = Math.min(peakJ + 1, cleaned.length - 1);
+      while (eK > sK + 2) {
+        const dEnd = Math.abs(normalizeAngle(segBearings[eK - 1] - segBearings[eK - 2]));
+        if (dEnd >= 6) break;
+        eK--;
+      }
+
+      const startOrigIdx = cleaned[sK].idx;
+      const endOrigIdx = cleaned[Math.min(eK, cleaned.length - 1)].idx;
+      const startDist = cum[startOrigIdx];
+      const endDist = cum[endOrigIdx];
+      const arcLen = Math.max(15, endDist - startDist);
+      const turnRad = toRad(maxAbsAngle);
+      const avgRadiusM = arcLen / Math.max(0.5, turnRad);
+
+      // Filtrar curvas abiertas de autopista (radio grande); conservar bucles y vueltas cerradas reales
+      if (avgRadiusM <= 88) {
+        const is270 = maxAbsAngle >= 195;
+        const absDeg = Math.round(maxAbsAngle);
+        const turnDir = netAngle >= 0 ? "right" : "left";
+        const dirWord = turnDir === "right" ? "derecha" : "izquierda";
+        const laneWord = turnDir === "right" ? "derecho" : "izquierdo";
+        const recSpeed = is270 ? 25 : 30;
+        const entryBearing = segBearings[sK];
+
+        detected.push({
+          id: `dyn-loop-${Math.round(startDist)}`,
+          kind: is270 ? "loop270" : "hairpin",
+          shortLabel: is270 ? `Bucle ${absDeg}°` : `Curva ${absDeg}°`,
+          title: is270
+            ? `Vuelta en bucle a desnivel (${absDeg}° · ${dirWord})`
+            : `Vuelta completamente cerrada (${absDeg}° · ${dirWord})`,
+          coord: coords[startOrigIdx],
+          lat: coords[startOrigIdx][1],
+          lng: coords[startOrigIdx][0],
+          distAlong: startDist,
+          endDistAlong: endDist,
+          arcLen,
+          turnDeg: absDeg,
+          recommendedSpeed: recSpeed,
+          takeLane: turnDir,
+          prepHeadline: `Prepárate: Vuelta cerrada de ${absDeg}° a la ${dirWord}, pasa al carril ${laneWord} y reduce a ${recSpeed} km/h`,
+          actionHeadline: `Gira siguiendo el bucle completo a la ${dirWord} sin salirte del carril (${recSpeed} km/h)`,
+          loopCoords: coords.slice(startOrigIdx, endOrigIdx + 1),
+          entryBearing,
+          avoidStubs: []
+        });
+        i = Math.max(endScan, eK);
+      } else {
+        i++;
+      }
+    } else {
+      i++;
+    }
+  }
+
+  return detected;
+}
+
+function extractDynamicManeuverCheckpoints(route, flatSteps) {
+  const rawCps = [];
+  const allIntersections = [];
+
+  for (const step of flatSteps) {
+    for (const inter of step.intersections || []) {
+      allIntersections.push({ inter, stepName: step.name });
+    }
+  }
+
+  for (let idx = 0; idx < flatSteps.length; idx++) {
+    const step = flatSteps[idx];
+    const mType = step.type || "";
+    const mod = step.modifier || "straight";
+    const roadName = step.rotaryName || step.name || "";
+
+    // Evitar duplicar checkpoint al salir de rotonda (ya cubierto al entrar)
+    if (mType === "exit roundabout" || mType === "exit rotary" || mType === "depart") continue;
+
+    if (mType === "roundabout" || mType === "rotary" || mType === "roundabout turn") {
+      const exitNum = step.exit || 1;
+      const nextStep = flatSteps[idx + 1];
+      const nextRoad = nextStep && nextStep.name ? ` hacia ${nextStep.name}` : roadName ? ` hacia ${roadName}` : "";
+      const exitStep = flatSteps.slice(idx + 1, idx + 4).find((s) => s.type === "exit roundabout" || s.type === "exit rotary");
+      const endDist = exitStep ? Math.max(step.distAlong + 35, exitStep.distAlong + 15) : step.distAlong + Math.max(40, Math.min(180, step.distance));
+
+      const takeLane = mod.includes("left") ? "left" : mod.includes("straight") ? "center" : "right";
+      const avoidStubs = [];
+      for (const inter of step.intersections || []) {
+        avoidStubs.push(...buildAvoidStubsForIntersection(inter, roadName));
+      }
+
+      rawCps.push({
+        id: `dyn-rb-${Math.round(step.distAlong)}`,
+        kind: "roundabout",
+        shortLabel: `Rotonda S${exitNum}`,
+        title: `Rotonda${roadName ? ` (${roadName})` : ""} · Salida ${exitNum}`,
+        coord: step.coord,
+        lat: step.coord[1],
+        lng: step.coord[0],
+        distAlong: step.distAlong,
+        endDistAlong: endDist,
+        recommendedSpeed: 30,
+        takeLane,
+        prepHeadline: `Rotonda adelante: Reduce a 30 km/h, prepárate para la salida ${exitNum}${nextRoad}`,
+        actionHeadline: `Entra a la rotonda y toma la salida ${exitNum}${nextRoad}`,
+        avoidStubs
+      });
+      continue;
+    }
+
+    const isRampOrFork = mType === "off ramp" || mType === "on ramp" || mType === "fork" || mType === "merge";
+    const isUturn = mod.includes("uturn");
+    const isSharp = mod.includes("sharp");
+
+    if (isRampOrFork || isUturn || isSharp) {
+      const isLeft = mod.includes("left") || isUturn;
+      const isRight = !isUturn && mod.includes("right");
+      const takeLane = isLeft ? "left" : isRight ? "right" : "center";
+      const laneWord = isLeft ? "izquierdo" : isRight ? "derecho" : "central";
+      const dirWord = isUturn ? "el retorno" : isLeft ? "la izquierda" : isRight ? "la derecha" : "al frente";
+      const destRoad = roadName ? ` hacia ${roadName}` : "";
+
+      const avoidStubs = [];
+      for (const inter of step.intersections || []) {
+        avoidStubs.push(...buildAvoidStubsForIntersection(inter, roadName));
+      }
+
+      const kind = isUturn ? "hairpin" : isRampOrFork ? "ramp" : "turn";
+      const recSpeed = isUturn ? 30 : 45;
+      const titleBase = isUturn
+        ? `Retorno cerrado${destRoad}`
+        : mType === "off ramp"
+        ? `Salida / Rampa a desnivel${destRoad}`
+        : mType === "on ramp"
+        ? `Incorporación / Rampa${destRoad}`
+        : `Bifurcación${destRoad}`;
+
+      rawCps.push({
+        id: `dyn-man-${Math.round(step.distAlong)}`,
+        kind,
+        shortLabel: isUturn ? "Retorno" : isRampOrFork ? "Rampa" : "Giro cerrado",
+        title: titleBase,
+        coord: step.coord,
+        lat: step.coord[1],
+        lng: step.coord[0],
+        distAlong: step.distAlong,
+        endDistAlong: step.distAlong + (isUturn ? 55 : 30),
+        recommendedSpeed: recSpeed,
+        takeLane,
+        prepHeadline: `Prepárate: Ve pasándote al carril ${laneWord} antes de ${titleBase.toLowerCase()}`,
+        actionHeadline: `Ahora: Toma ${dirWord}${destRoad}`,
+        avoidStubs
+      });
+    }
+  }
+
+  return { rawCps, allIntersections };
+}
+
+function analyzeRouteGeometryAndManeuvers(route, coords, cum, flatSteps) {
+  const geomLoops = detectLoopsAndHairpinsFromGeometry(coords, cum);
+  const { rawCps, allIntersections } = extractDynamicManeuverCheckpoints(route, flatSteps);
+
+  // Enriquecer cada bucle geométrico con desvíos reales desde las intersecciones OSRM cercanas o tangente recta
+  for (const loop of geomLoops) {
+    const nearbyAvoids = [];
+    for (const item of allIntersections) {
+      if (haversineMeters(loop.coord, item.inter.location) <= 45) {
+        nearbyAvoids.push(...buildAvoidStubsForIntersection(item.inter, item.stepName));
+      }
+    }
+    if (!nearbyAvoids.length && typeof loop.entryBearing === "number") {
+      const straightTip = projectPointMeters(loop.coord, loop.entryBearing, 30);
+      nearbyAvoids.push({
+        label: "EVITAR: Seguir recto (te pasas la entrada de la vuelta cerrada)",
+        coords: [loop.coord, straightTip]
+      });
+    }
+    loop.avoidStubs = nearbyAvoids;
+  }
+
+  // Combinar loops geométricos y checkpoints de OSRM fusionando los que coinciden en < 90 m
+  const combined = [...geomLoops, ...rawCps].sort((a, b) => a.distAlong - b.distAlong);
+  const merged = [];
+  const priority = { loop270: 4, roundabout: 4, hairpin: 3, ramp: 2, turn: 1 };
+
+  for (const cp of combined) {
+    const prev = merged[merged.length - 1];
+    if (prev && Math.abs(cp.distAlong - prev.distAlong) < 90) {
+      const keepNew = (priority[cp.kind] || 0) > (priority[prev.kind] || 0);
+      if (keepNew) {
+        cp.avoidStubs = [...(cp.avoidStubs || []), ...(prev.avoidStubs || [])];
+        if (!cp.loopCoords && prev.loopCoords) cp.loopCoords = prev.loopCoords;
+        merged[merged.length - 1] = cp;
+      } else {
+        prev.avoidStubs = [...(prev.avoidStubs || []), ...(cp.avoidStubs || [])];
+        if (!prev.loopCoords && cp.loopCoords) prev.loopCoords = cp.loopCoords;
+        if (cp.endDistAlong > prev.endDistAlong) prev.endDistAlong = cp.endDistAlong;
+      }
+    } else {
+      merged.push(cp);
+    }
+  }
+
+  // Numerar dinámicamente etiquetas cortas y construir lista de opciones para el banner
+  const avoidFeatures = [];
+  const loopFeatures = [];
+
+  merged.forEach((cp, idx) => {
+    cp.indexNum = idx + 1;
+    cp.shortLabel = `${idx + 1}. ${cp.shortLabel}`;
+
+    const takeDesc =
+      cp.kind === "loop270"
+        ? `TOMAR: Mantén el carril ${cp.takeLane === "right" ? "derecho" : "izquierdo"} y completa el giro de ${cp.turnDeg}° (${cp.recommendedSpeed} km/h)`
+        : cp.kind === "roundabout"
+        ? `TOMAR: ${cp.actionHeadline}`
+        : `TOMAR: ${cp.actionHeadline}`;
+
+    const paths = [{ type: "take", label: takeDesc }];
+    const seenLabels = new Set();
+
+    for (const stub of cp.avoidStubs || []) {
+      avoidFeatures.push({
+        type: "Feature",
+        properties: { label: `${cp.title} — ${stub.label}` },
+        geometry: { type: "LineString", coordinates: stub.coords }
+      });
+      if (!seenLabels.has(stub.label)) {
+        seenLabels.add(stub.label);
+        paths.push({ type: "avoid", label: stub.label });
+      }
+    }
+    if (paths.length === 1) {
+      paths.push({
+        type: "avoid",
+        label: cp.kind === "loop270" || cp.kind === "hairpin"
+          ? "EVITAR: Tomar salida tangente antes de completar el giro"
+          : "EVITAR: Carril contrario al desvío indicado"
+      });
+    }
+    cp.paths = paths;
+
+    if (cp.loopCoords && cp.loopCoords.length >= 2) {
+      loopFeatures.push({
+        type: "Feature",
+        properties: { title: cp.title },
+        geometry: { type: "LineString", coordinates: cp.loopCoords }
+      });
+    } else if (cp.kind === "roundabout") {
+      const rbSlice = sliceCoordsByDistance(coords, cum, cp.distAlong, cp.endDistAlong);
+      if (rbSlice.length >= 2) {
+        loopFeatures.push({
+          type: "Feature",
+          properties: { title: cp.title },
+          geometry: { type: "LineString", coordinates: rbSlice }
+        });
+      }
+    }
+  });
+
+  state.activeCheckpoints = merged;
+  state.dynamicAvoidFeatures = avoidFeatures;
+  state.dynamicLoopFeatures = loopFeatures;
+}
+
+function sliceCoordsByDistance(coords, cum, startM, endM) {
+  const out = [];
+  for (let i = 0; i < coords.length; i++) {
+    if (cum[i] >= startM - 10 && cum[i] <= endM + 10) {
+      out.push(coords[i]);
+    }
+  }
+  return out;
+}
+
+function buildRouteArrowChevrons(coords, cum) {
+  const features = [];
+  const maxD = cum[cum.length - 1] || 0;
+  if (maxD < 30) return features;
+
+  let cursor = 35;
+  while (cursor < maxD - 20) {
+    const insideTight = state.activeCheckpoints.some(
+      (c) => (c.kind === "loop270" || c.kind === "hairpin" || c.kind === "roundabout") &&
+        cursor >= c.distAlong - 20 &&
+        cursor <= (c.endDistAlong || c.distAlong + 30) + 15
+    );
+    const stepM = insideTight ? 24 : 90;
+    const sample = sampleRouteAtDistance(cursor);
+    if (sample) {
+      features.push({
+        type: "Feature",
+        properties: { bearing: sample.heading },
+        geometry: { type: "Point", coordinates: sample.coord }
+      });
+    }
+    cursor += stepM;
+  }
+  return features;
 }
 
 function processPrimaryRoute(route) {
@@ -1031,23 +1693,24 @@ function processPrimaryRoute(route) {
         distAlong: along,
         type: step.maneuver.type,
         modifier: step.maneuver.modifier || "straight",
-        name: step.name || "Carretera / Bulevar",
-        distance: step.distance
+        exit: step.maneuver.exit || null,
+        name: step.name || "",
+        rotaryName: step.rotary_name || "",
+        distance: step.distance,
+        intersections: step.intersections || []
       });
     }
   }
   state.steps = flatSteps;
 
-  state.activeCheckpoints = TEGUCIGALPA_CHECKPOINTS.map((cp) => {
-    const proj = projectOntoRoute([cp.lng, cp.lat]);
-    return { ...cp, distAlong: proj.distAlong, perpDist: proj.perpDist };
-  })
-    .filter((cp) => cp.perpDist < 220)
-    .sort((a, b) => a.distAlong - b.distAlong);
+  analyzeRouteGeometryAndManeuvers(route, coords, cum, flatSteps);
+  state.routeArrowFeatures = buildRouteArrowChevrons(coords, cum);
 
   el.metricTotalDist.textContent = `${(route.distance / 1000).toFixed(1)} km`;
   el.metricTotalTime.textContent = `${Math.round(route.duration / 60)} min`;
-  el.metricRoutesCount.textContent = `${state.routes.length} rutas · ${state.activeCheckpoints.length} puentes`;
+  el.metricRoutesCount.textContent = `${state.routes.length} rutas · ${state.activeCheckpoints.length} alertas`;
+
+  renderCheckpointStrip();
 }
 
 function projectOntoRoute(point, hintMeters = null) {
@@ -1091,7 +1754,7 @@ function projectOntoRoute(point, hintMeters = null) {
     const cx = ax + t * dx;
     const cy = ay + t * dy;
     const perp = Math.hypot(px - cx, py - cy);
-    const segMeters = (cum[i + 1] - cum[i]) || Math.hypot(dx, dy);
+    const segMeters = cum[i + 1] - cum[i] || Math.hypot(dx, dy);
     const candAlong = cum[i] + t * segMeters;
 
     let score = perp;
@@ -1117,16 +1780,12 @@ function projectOntoRoute(point, hintMeters = null) {
   };
 }
 
-function findNearestRouteProgress(point, hintMeters = null) {
-  return projectOntoRoute(point, hintMeters).distAlong;
-}
-
-/* ================= RENDER MAP LAYERS & VECTOR MARKERS ================= */
+/* ================= RENDER MAP LAYERS & DYNAMIC MARKERS ================= */
 function renderAllMapData() {
   if (!state.mapReady || !state.mainCoords.length) return;
   const m = state.map;
 
-  m.getSource("main-route-src").setData({
+  m.getSource("main-route-src")?.setData({
     type: "FeatureCollection",
     features: [{ type: "Feature", geometry: { type: "LineString", coordinates: state.mainCoords } }]
   });
@@ -1138,32 +1797,19 @@ function renderAllMapData() {
     },
     geometry: r.geometry
   }));
-  m.getSource("alt-routes-src").setData({ type: "FeatureCollection", features: altFeatures });
-
-  const takeFeatures = [];
-  const avoidFeatures = [];
-  for (const cp of TEGUCIGALPA_CHECKPOINTS) {
-    for (const p of cp.paths) {
-      const feature = {
-        type: "Feature",
-        properties: { label: `${cp.title} — ${p.label}` },
-        geometry: { type: "LineString", coordinates: p.coords }
-      };
-      if (p.type === "take") takeFeatures.push(feature);
-      else avoidFeatures.push(feature);
-    }
-  }
-  m.getSource("take-forks-src").setData({ type: "FeatureCollection", features: takeFeatures });
-  m.getSource("avoid-forks-src").setData({ type: "FeatureCollection", features: avoidFeatures });
+  m.getSource("alt-routes-src")?.setData({ type: "FeatureCollection", features: altFeatures });
+  m.getSource("avoid-forks-src")?.setData({ type: "FeatureCollection", features: state.dynamicAvoidFeatures });
+  m.getSource("loop-highlight-src")?.setData({ type: "FeatureCollection", features: state.dynamicLoopFeatures });
+  m.getSource("route-arrows-src")?.setData({ type: "FeatureCollection", features: state.routeArrowFeatures });
 
   state.stopMarkers.forEach((mk) => mk.remove());
   state.stopMarkers = [];
-  const activeStops = getActiveStops();
+  const activeStops = state.stops;
   activeStops.forEach((s, idx) => {
     const div = document.createElement("div");
     div.className = `stop-marker ${idx === 0 ? "origin" : idx === activeStops.length - 1 ? "final" : ""}`;
     const icon = idx === 0 ? svgIcon("flag", 12) : svgIcon("map-pin", 12);
-    const label = s.name.split("(")[0].trim();
+    const label = shortPlaceName(s.name);
     div.innerHTML = `${icon}<span>${idx === 0 ? label : `${idx}. ${label}`}</span>`;
     const mk = new maplibregl.Marker({ element: div, anchor: "bottom" })
       .setLngLat([s.lng, s.lat])
@@ -1173,10 +1819,16 @@ function renderAllMapData() {
 
   state.forkMarkers.forEach((item) => item.mk.remove());
   state.forkMarkers = [];
-  TEGUCIGALPA_CHECKPOINTS.forEach((cp, idx) => {
+  state.activeCheckpoints.forEach((cp, idx) => {
     const div = document.createElement("div");
-    div.className = "fork-marker";
-    div.title = cp.shortLabel;
+    const extraCls =
+      cp.kind === "loop270" || cp.kind === "hairpin"
+        ? "loop-marker"
+        : cp.kind === "roundabout"
+        ? "roundabout-marker"
+        : "";
+    div.className = `fork-marker ${extraCls}`.trim();
+    div.title = cp.title;
     div.innerHTML = `<span>${idx + 1}</span>`;
     div.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -1209,17 +1861,16 @@ function updateForkMarkersVisibility() {
   if (!state.map || !state.forkMarkers.length) return;
   const zoom = state.map.getZoom();
   const curAlong = state.mode === "sim" ? state.simDistMeters : state.lastAlongMeters;
-  const activeById = new Map(state.activeCheckpoints.map((c) => [c.id, c]));
 
   state.forkMarkers.forEach(({ el: div, cp }) => {
-    const activeCp = activeById.get(cp.id);
-    const passed = activeCp ? activeCp.distAlong - curAlong < -35 : false;
-    const shouldHide = zoom < 12.5 || (state.cameraMode !== "overview" && passed);
+    const endDist = cp.endDistAlong || cp.distAlong;
+    const passed = endDist - curAlong < -35;
+    const shouldHide = zoom < 12.2 || (state.cameraMode !== "overview" && passed);
     div.classList.toggle("is-hidden", shouldHide);
   });
 }
 
-/* ================= VEHICLE POSITION, 3D ARROW & LANE LOGIC ================= */
+/* ================= VEHICLE POSITION, 3D ARROW, LOOP/ROUNDABOUT HUD & VOICE ================= */
 function sampleRouteAtDistance(meters) {
   const cum = state.cumDistances;
   const coords = state.mainCoords;
@@ -1256,6 +1907,7 @@ function sampleRouteAtDistance(meters) {
 function resetVehicleToStart() {
   state.simDistMeters = 0;
   state.lastAlongMeters = 0;
+  state.currentSimKmh = 58;
   state.activeCheckpointId = null;
   state.dismissedCheckpointId = null;
   state.bridgeAlertShownAt = 0;
@@ -1275,17 +1927,16 @@ function resetVehicleToStart() {
 function jumpToCheckpoint(cp) {
   if (state.mode === "gps") stopGpsMode();
   cancelSpeech();
-  const matched = state.activeCheckpoints.find((c) => c.id === cp.id);
-  const cpAlong = matched ? matched.distAlong : projectOntoRoute([cp.lng, cp.lat]).distAlong;
-  const startAlong = Math.max(0, cpAlong - 320);
+  const startAlong = Math.max(0, cp.distAlong - 280);
   state.simDistMeters = startAlong;
   state.lastAlongMeters = startAlong;
+  state.currentSimKmh = 46;
   state.activeCheckpointId = null;
   state.dismissedCheckpointId = null;
   state.bridgeAlertShownAt = 0;
   state.lastSpokenContextId = null;
-  state.spokenAlerts.delete(`${cp.id}-far`);
-  state.spokenAlerts.delete(`${cp.id}-near`);
+  state.spokenAlerts.delete(`${cp.id}-prep`);
+  state.spokenAlerts.delete(`${cp.id}-action`);
 
   const sample = sampleRouteAtDistance(startAlong);
   if (sample) {
@@ -1300,7 +1951,7 @@ function jumpToCheckpoint(cp) {
     setCameraButtonUI("street");
     updateNavigationHUD();
     focusCameraOnVehicle(true);
-    showToast(`Probando desvío: ${cp.shortLabel}`);
+    showToast(`Probando: ${cp.shortLabel}`);
   }
 }
 
@@ -1355,7 +2006,7 @@ function updateNavigationHUD() {
       : projectOntoRoute(state.vehiclePos, state.lastAlongMeters).distAlong;
   state.lastAlongMeters = curAlong;
 
-  const lookAhead = sampleRouteAtDistance(Math.min(totalDist, curAlong + 90));
+  const lookAhead = sampleRouteAtDistance(Math.min(totalDist, curAlong + 75));
   const targetBearing = lookAhead ? calculateBearing(state.vehiclePos, lookAhead.coord) : state.vehicleHeading;
   const arrowAngle = state.cameraMode !== "overview"
     ? normalizeAngle(targetBearing - state.vehicleHeading)
@@ -1364,14 +2015,26 @@ function updateNavigationHUD() {
   el.arrow3d.style.transform = `rotateX(34deg) rotateZ(${arrowAngle.toFixed(1)}deg)`;
   el.speedBadge.textContent = `${Math.round(state.speedKmh)} km/h`;
 
+  // Buscar checkpoint activo (incluye permanecer activo mientras cruza un bucle 270° o rotonda)
   let nearestCp = null;
   let nearestCpDelta = Infinity;
-  const cpPool = state.activeCheckpoints.length ? state.activeCheckpoints : [];
-  for (const cp of cpPool) {
-    const delta = cp.distAlong - curAlong;
-    if (delta >= -10 && delta <= 680 && delta < nearestCpDelta) {
-      nearestCpDelta = delta;
-      nearestCp = cp;
+  for (const cp of state.activeCheckpoints) {
+    const entryDelta = cp.distAlong - curAlong;
+    const endDelta = (cp.endDistAlong || cp.distAlong) - curAlong;
+    const insideSpan = curAlong >= cp.distAlong - 12 && curAlong <= (cp.endDistAlong || cp.distAlong) + 12;
+
+    if (insideSpan || (entryDelta >= -10 && entryDelta <= 680)) {
+      if (insideSpan) {
+        nearestCp = cp;
+        nearestCpDelta = Math.max(0, endDelta);
+        cp._currentlyInside = true;
+        break;
+      }
+      if (entryDelta < nearestCpDelta) {
+        nearestCpDelta = entryDelta;
+        nearestCp = cp;
+        cp._currentlyInside = false;
+      }
     }
   }
 
@@ -1383,7 +2046,7 @@ function updateNavigationHUD() {
   const nextStep = state.steps.find((st) => st.distAlong > curAlong + 8) || state.steps[state.steps.length - 1];
   const nextStepDist = nextStep ? Math.max(0, nextStep.distAlong - curAlong) : 0;
 
-  const speedMps = Math.max(8, (state.speedKmh || 50) / 3.6);
+  const speedMps = Math.max(7, (state.speedKmh || 48) / 3.6);
   const leadCompMeters = speedMps * 0.45;
   const showLanes = !state.cleanUiMode && (Boolean(nearestCp) || nextStepDist <= 550);
   el.laneForkBar.classList.toggle("hidden", !showLanes);
@@ -1393,49 +2056,73 @@ function updateNavigationHUD() {
       state.activeCheckpointId = nearestCp.id;
       state.bridgeAlertShownAt = performance.now();
     }
-    const alertExpired = performance.now() - state.bridgeAlertShownAt > 5000;
+
+    const isInside = Boolean(nearestCp._currentlyInside);
+    const entryDist = Math.max(0, nearestCp.distAlong - curAlong);
+    const dispDist = isInside ? Math.max(0, (nearestCp.endDistAlong || nearestCp.distAlong) - curAlong) : entryDist;
+    const alertExpired = performance.now() - state.bridgeAlertShownAt > 5500;
     const showBridgeBanner =
       !state.cleanUiMode &&
       state.dismissedCheckpointId !== nearestCp.id &&
       !alertExpired &&
-      nearestCpDelta > 25;
+      (dispDist > 15 || isInside);
 
-    const dispDist = Math.max(0, nearestCpDelta);
-    const headline = dispDist > 260 ? nearestCp.prepHeadline : nearestCp.actionHeadline;
+    let headline;
+    if (isInside && (nearestCp.kind === "loop270" || nearestCp.kind === "hairpin")) {
+      const dirWord = nearestCp.takeLane === "right" ? "derecha" : "izquierda";
+      headline = `Dentro del bucle (${nearestCp.turnDeg}°): Sigue girando a la ${dirWord} hasta conectar`;
+    } else if (isInside && nearestCp.kind === "roundabout") {
+      headline = nearestCp.actionHeadline;
+    } else {
+      headline = entryDist > 260 ? nearestCp.prepHeadline : nearestCp.actionHeadline;
+    }
+
     el.hudCard.classList.add("checkpoint-active");
     el.checkpointBadge.classList.remove("hidden");
+    el.checkpointBadge.innerHTML = `<i data-lucide="alert-triangle" class="ico-xs"></i> ${nearestCp.kind === "roundabout" ? "Rotonda" : nearestCp.kind === "loop270" ? "Bucle 270°" : nearestCp.kind === "hairpin" ? "Vuelta Cerrada" : "Desvío"}`;
+
+    if (nearestCp.recommendedSpeed && nearestCp.recommendedSpeed <= 35) {
+      el.curveSpeedBadge.textContent = `Máx ${nearestCp.recommendedSpeed} km/h`;
+      el.curveSpeedBadge.classList.remove("hidden");
+    } else {
+      el.curveSpeedBadge.classList.add("hidden");
+    }
+
     el.bridgeAlert.classList.toggle("hidden", !showBridgeBanner);
     el.hudDistance.textContent = formatDistance(dispDist);
     el.hudTitle.textContent = headline;
     el.hudSubtitle.textContent = state.showRouteLine
-      ? nearestCp.title
+      ? isInside
+        ? `${nearestCp.title} · Resta ${formatDistance(dispDist)} del giro`
+        : nearestCp.title
       : "Vista HD despejada · Mantente derecho";
 
     if (showBridgeBanner) {
       el.bridgeAlertTitle.textContent = nearestCp.title;
-      el.bridgeAlertDist.textContent = `a ${formatDistance(dispDist)}`;
+      el.bridgeAlertDist.textContent = isInside ? `Faltan ${formatDistance(dispDist)}` : `a ${formatDistance(entryDist)}`;
       el.bridgePathsGrid.innerHTML = nearestCp.paths
         .map((p) => {
           const icon = p.type === "take" ? svgIcon("check", 13) : svgIcon("ban", 13);
-          return `<div class="bridge-path-item ${p.type}">${icon}<span>${p.label}</span></div>`;
+          return `<div class="bridge-path-item ${p.type}">${icon}<span>${escapeHtml(p.label)}</span></div>`;
         })
         .join("");
     }
 
     highlightLanes(nearestCp.takeLane, true);
 
-    const effectiveDelta = nearestCpDelta - leadCompMeters;
+    const effectiveDelta = entryDist - leadCompMeters;
     const prepTrigger = Math.min(580, Math.max(300, speedMps * 9));
-    const actionTrigger = Math.min(210, Math.max(85, speedMps * 4));
-    if (effectiveDelta <= prepTrigger && effectiveDelta > actionTrigger) {
+    const actionTrigger = Math.min(200, Math.max(85, speedMps * 4));
+    if (!isInside && effectiveDelta <= prepTrigger && effectiveDelta > actionTrigger) {
       speakSpanish(nearestCp.prepHeadline, `${nearestCp.id}-prep`, nearestCp.id, "prep");
-    } else if (effectiveDelta <= actionTrigger && effectiveDelta > 10) {
+    } else if ((isInside || effectiveDelta <= actionTrigger) && dispDist > 8) {
       speakSpanish(nearestCp.actionHeadline, `${nearestCp.id}-action`, nearestCp.id, "action");
     }
   } else {
     state.activeCheckpointId = null;
     el.hudCard.classList.remove("checkpoint-active");
     el.checkpointBadge.classList.add("hidden");
+    el.curveSpeedBadge.classList.add("hidden");
     el.bridgeAlert.classList.add("hidden");
 
     el.hudDistance.textContent = formatDistance(nextStepDist);
@@ -1486,6 +2173,23 @@ function mapModifierToSpanish(step, distMeters = Infinity) {
     return { lane: "center", label: `Llegaste a tu destino${street}`, stage: "action" };
   }
 
+  const isRoundabout = step.type === "roundabout" || step.type === "rotary" || step.type === "roundabout turn";
+  if (isRoundabout) {
+    const exitNum = step.exit || 1;
+    if (distMeters > 240) {
+      return {
+        lane: "right",
+        label: `Rotonda adelante: Reduce velocidad, salida ${exitNum}${street}`,
+        stage: "prep"
+      };
+    }
+    return {
+      lane: "right",
+      label: `Entra a la rotonda y toma la salida ${exitNum}${street}`,
+      stage: "action"
+    };
+  }
+
   const isUturn = m.includes("uturn");
   const isLeft = !isUturn && m.includes("left");
   const isRight = m.includes("right");
@@ -1494,7 +2198,7 @@ function mapModifierToSpanish(step, distMeters = Infinity) {
     if (isUturn) {
       return {
         lane: "left",
-        label: "Con anticipación: Ve pasándote al carril izquierdo para el retorno",
+        label: "Con anticipación: Ve pasándote al carril izquierdo para el retorno cerrado",
         stage: "prep"
       };
     }
@@ -1520,7 +2224,7 @@ function mapModifierToSpanish(step, distMeters = Infinity) {
   }
 
   if (isUturn) {
-    return { lane: "left", label: `Toma el retorno ahora${street}`, stage: "action" };
+    return { lane: "left", label: `Toma el retorno cerrado ahora${street}`, stage: "action" };
   }
   if (isLeft) {
     return { lane: "left", label: `Toma la ruta a la izquierda${street}`, stage: "action" };
@@ -1545,15 +2249,28 @@ function highlightLanes(activeLane, markOthersAvoid) {
   });
 }
 
-/* ================= SIMULATION LOOP & LIVE GPS ================= */
+/* ================= SIMULATION LOOP WITH REALISTIC CURVE PHYSICS ================= */
+function computeTargetSimSpeedKmh(curAlong) {
+  for (const cp of state.activeCheckpoints) {
+    const endD = cp.endDistAlong || cp.distAlong;
+    if (curAlong >= cp.distAlong - 120 && curAlong <= endD + 25) {
+      return cp.recommendedSpeed || 32;
+    }
+  }
+  return 66;
+}
+
 function animationLoop(ts) {
   if (state.mode === "sim" && state.simPlaying && state.mainCoords.length) {
     if (!state.lastFrameTime) state.lastFrameTime = ts;
     const dt = Math.min(0.1, (ts - state.lastFrameTime) / 1000);
     state.lastFrameTime = ts;
 
-    const metersPerSec = 18 * state.simSpeed;
-    state.speedKmh = metersPerSec * 3.6;
+    const targetKmh = computeTargetSimSpeedKmh(state.simDistMeters);
+    state.currentSimKmh += (targetKmh - state.currentSimKmh) * Math.min(1, dt * 3.5);
+    const metersPerSec = (state.currentSimKmh / 3.6) * state.simSpeed;
+    state.speedKmh = state.currentSimKmh;
+
     const maxDist = state.cumDistances[state.cumDistances.length - 1] || 0;
     state.simDistMeters = Math.min(maxDist, state.simDistMeters + metersPerSec * dt);
 
@@ -1655,44 +2372,108 @@ function onDeviceCompass(ev) {
   }
 }
 
-/* ================= CHECKPOINT STRIP & LEG SELECTOR ================= */
+/* ================= DYNAMIC CHECKPOINT STRIP & SQL ROUTE SELECTOR ================= */
 function renderCheckpointStrip() {
-  el.checkpointStrip.innerHTML = TEGUCIGALPA_CHECKPOINTS.map(
-    (cp) => `<button type="button" class="cp-pill" data-cp="${cp.id}">${cp.shortLabel}</button>`
-  ).join("");
+  if (!state.activeCheckpoints.length) {
+    el.checkpointStrip.innerHTML = `<span class="cp-pill">Ruta directa</span>`;
+    return;
+  }
+  el.checkpointStrip.innerHTML = state.activeCheckpoints
+    .map((cp) => `<button type="button" class="cp-pill" data-cp="${cp.id}">${escapeHtml(cp.shortLabel)}</button>`)
+    .join("");
 
-  el.checkpointStrip.querySelectorAll(".cp-pill").forEach((btn) => {
+  el.checkpointStrip.querySelectorAll(".cp-pill[data-cp]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const cp = TEGUCIGALPA_CHECKPOINTS.find((c) => c.id === btn.dataset.cp);
+      const cp = state.activeCheckpoints.find((c) => c.id === btn.dataset.cp);
       if (cp) jumpToCheckpoint(cp);
     });
   });
 }
 
 function renderLegPills() {
-  const stops = state.stops;
-  let html = `<button type="button" class="leg-pill ${state.activeLeg === "all" ? "active" : ""}" data-leg="all">Completa</button>`;
-  for (let i = 0; i < stops.length - 1; i++) {
-    const shortB = stops[i + 1].name.split("(")[0].split(",")[0].trim();
-    html += `<button type="button" class="leg-pill ${String(state.activeLeg) === String(i) ? "active" : ""}" data-leg="${i}">T${i + 1}: ${shortB}</button>`;
-  }
-  el.legFilterPills.innerHTML = html;
+  const routes = sqlGetAllRoutes();
+  el.legFilterPills.innerHTML = routes
+    .map(
+      (r) =>
+        `<button type="button" class="leg-pill ${r.id === state.activeRouteId ? "active" : ""}" data-route-id="${escapeHtml(r.id)}">${escapeHtml(r.short_label)}</button>`
+    )
+    .join("");
 
   el.legFilterPills.querySelectorAll(".leg-pill").forEach((btn) => {
     btn.addEventListener("click", () => {
-      state.activeLeg = btn.dataset.leg;
+      const nextId = btn.dataset.routeId;
+      if (!nextId || nextId === state.activeRouteId) return;
+      sqlSetActiveRoute(nextId);
+      loadActiveRouteFromSql();
       renderLegPills();
       fetchAndBuildRoutes();
     });
   });
+  updateSqlStatusBadge();
 }
 
-/* ================= ITINERARY CONFIGURATOR MODAL ================= */
+/* ================= SQL ROUTES & ITINERARY CONFIGURATOR MODAL ================= */
 function openItineraryModal() {
   state.draftStops = structuredClone(state.stops);
   el.searchResults.innerHTML = "";
+  if (el.sqlRouteNameInput) el.sqlRouteNameInput.value = "";
+  renderSqlRoutesList();
   renderDraftStopsList();
+  updateSqlStatusBadge();
   el.itineraryModal.classList.remove("hidden");
+}
+
+function renderSqlRoutesList() {
+  if (!el.sqlRoutesList) return;
+  const routes = sqlGetAllRoutes();
+  el.sqlRoutesList.innerHTML = routes
+    .map((r) => {
+      const isAct = r.id === state.activeRouteId;
+      const badgeText = isAct ? "Activa en mapa" : "Cargar";
+      return `
+        <li class="sql-route-row ${isAct ? "active" : ""}">
+          <div class="sql-route-info" data-sql-select="${escapeHtml(r.id)}">
+            <div class="sql-route-name">${escapeHtml(r.name)}</div>
+            <div class="sql-route-meta">${Number(r.stop_count || 0)} paradas · ${r.category === "preset" ? "Pre-cargada SQL" : "Guardada por usuario"}</div>
+          </div>
+          <div class="sql-route-actions">
+            <button type="button" class="ios-mini-btn ${isAct ? "" : "ghost"}" data-sql-select="${escapeHtml(r.id)}">${badgeText}</button>
+            <button type="button" class="stop-btn danger" data-sql-del="${escapeHtml(r.id)}" title="Eliminar de SQL">${svgIcon("trash", 14)}</button>
+          </div>
+        </li>
+      `;
+    })
+    .join("");
+
+  el.sqlRoutesList.querySelectorAll("[data-sql-select]").forEach((node) => {
+    node.addEventListener("click", () => {
+      const rid = node.dataset.sqlSelect;
+      sqlSetActiveRoute(rid);
+      loadActiveRouteFromSql();
+      state.draftStops = structuredClone(state.stops);
+      renderSqlRoutesList();
+      renderDraftStopsList();
+      renderLegPills();
+      fetchAndBuildRoutes();
+      showToast("Ruta cargada desde SQLite");
+    });
+  });
+
+  el.sqlRoutesList.querySelectorAll("[data-sql-del]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const rid = btn.dataset.sqlDel;
+      if (sqlDeleteRoute(rid)) {
+        loadActiveRouteFromSql();
+        state.draftStops = structuredClone(state.stops);
+        renderSqlRoutesList();
+        renderDraftStopsList();
+        renderLegPills();
+        fetchAndBuildRoutes();
+        showToast("Ruta eliminada de la base de datos SQL");
+      }
+    });
+  });
 }
 
 function renderDraftStopsList() {
@@ -1703,8 +2484,8 @@ function renderDraftStopsList() {
         <li class="stop-row">
           <div class="stop-info">
             <div class="stop-role">${role}</div>
-            <div class="stop-name">${s.name}</div>
-            <div class="stop-coords">${s.lat.toFixed(5)}, ${s.lng.toFixed(5)}</div>
+            <div class="stop-name">${escapeHtml(s.name)}</div>
+            <div class="stop-coords">${Number(s.lat).toFixed(5)}, ${Number(s.lng).toFixed(5)}</div>
           </div>
           <div class="stop-actions">
             <button type="button" class="stop-btn" data-act="up" data-idx="${idx}" title="Subir">${svgIcon("arrow-up", 14)}</button>
@@ -1738,7 +2519,7 @@ function renderDraftStopsList() {
 
 async function searchPlacesHonduras(query) {
   if (!query.trim()) return;
-  el.searchResults.innerHTML = `<li class="search-result-item">Buscando "${query}" en Honduras…</li>`;
+  el.searchResults.innerHTML = `<li class="search-result-item">Buscando "${escapeHtml(query)}" en Honduras…</li>`;
   try {
     const url = `https://nominatim.openstreetmap.org/search?format=json&countrycodes=hn&limit=5&q=${encodeURIComponent(query)}`;
     const res = await fetch(url, { headers: { "Accept-Language": "es" } });
@@ -1751,7 +2532,7 @@ async function searchPlacesHonduras(query) {
       .map(
         (it, i) => `
         <li class="search-result-item">
-          <span>${it.display_name}</span>
+          <span>${escapeHtml(it.display_name)}</span>
           <button type="button" class="ios-mini-btn" data-add="${i}">Agregar</button>
         </li>
       `
@@ -1907,9 +2688,39 @@ function bindEvents() {
   el.btnCancelModal.addEventListener("click", () => el.itineraryModal.classList.add("hidden"));
 
   el.btnRestoreDefault.addEventListener("click", () => {
-    state.draftStops = structuredClone(DEFAULT_STOPS);
+    sqlRestoreDefaultRoutes();
+    loadActiveRouteFromSql();
+    state.draftStops = structuredClone(state.stops);
+    renderSqlRoutesList();
     renderDraftStopsList();
-    showToast("Itinerario original restaurado");
+    renderLegPills();
+    fetchAndBuildRoutes();
+    showToast("Base de datos SQL restaurada con las 4 rutas");
+  });
+
+  el.btnSaveNewSqlRoute.addEventListener("click", () => {
+    if (state.draftStops.length < 2) {
+      showToast("Agrega al menos origen y destino antes de guardar");
+      return;
+    }
+    const typed = el.sqlRouteNameInput.value.trim();
+    const autoName = `${shortPlaceName(state.draftStops[0].name)} → ${shortPlaceName(state.draftStops[state.draftStops.length - 1].name)}`;
+    const fullName = typed || autoName;
+    const shortLbl = typed ? (typed.length > 16 ? `${typed.slice(0, 15)}…` : typed) : shortPlaceName(state.draftStops[state.draftStops.length - 1].name);
+
+    sqlSaveRoute({
+      name: fullName,
+      shortLabel: shortLbl,
+      category: "custom",
+      stops: state.draftStops,
+      makeActive: true
+    });
+    el.sqlRouteNameInput.value = "";
+    loadActiveRouteFromSql();
+    renderSqlRoutesList();
+    renderLegPills();
+    fetchAndBuildRoutes();
+    showToast(`Guardada en SQLite: ${fullName}`);
   });
 
   el.btnUseMyLocation.addEventListener("click", () => {
@@ -1945,23 +2756,37 @@ function bindEvents() {
   });
 
   el.btnApplyItinerary.addEventListener("click", () => {
-    state.stops = structuredClone(state.draftStops);
-    state.activeLeg = "all";
-    saveStops(state.stops);
+    if (state.draftStops.length < 2) {
+      showToast("Debes mantener al menos origen y destino");
+      return;
+    }
+    const routes = sqlGetAllRoutes();
+    const current = routes.find((r) => r.id === state.activeRouteId);
+    sqlSaveRoute({
+      id: state.activeRouteId,
+      name: current ? current.name : `${shortPlaceName(state.draftStops[0].name)} → ${shortPlaceName(state.draftStops[state.draftStops.length - 1].name)}`,
+      shortLabel: current ? current.short_label : shortPlaceName(state.draftStops[state.draftStops.length - 1].name),
+      category: current ? current.category : "custom",
+      stops: state.draftStops,
+      makeActive: true
+    });
+    loadActiveRouteFromSql();
     el.itineraryModal.classList.add("hidden");
     renderLegPills();
     fetchAndBuildRoutes();
+    showToast("Cambios guardados en SQLite y ruta trazada");
   });
 }
 
 /* ================= BOOTSTRAP ================= */
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   refreshLucideIcons();
   initVoiceEngine();
+  await initSqlDatabase();
+  loadActiveRouteFromSql();
   initMap();
-  renderCheckpointStrip();
   renderLegPills();
   bindEvents();
-  fetchAndBuildRoutes();
+  await fetchAndBuildRoutes();
   requestAnimationFrame(animationLoop);
 });

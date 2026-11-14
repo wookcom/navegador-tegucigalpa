@@ -163,6 +163,13 @@ html, body, #app {
   color: var(--ios-amber);
 }
 
+.ios-pill-curve {
+  background: rgba(255, 69, 58, 0.24);
+  color: #ff6961;
+  border: 1px solid rgba(255, 69, 58, 0.5);
+  font-variant-numeric: tabular-nums;
+}
+
 .ios-pill-speed {
   margin-left: auto;
   font-variant-numeric: tabular-nums;
@@ -631,6 +638,18 @@ button {
   transform: scale(1.12);
 }
 
+.fork-marker.loop-marker {
+  border-color: #5efce8;
+  color: #5efce8;
+  background: rgba(12, 26, 32, 0.94);
+}
+
+.fork-marker.roundabout-marker {
+  border-color: #30d158;
+  color: #30d158;
+  background: rgba(10, 28, 18, 0.94);
+}
+
 .fork-marker.is-hidden {
   opacity: 0;
   pointer-events: none;
@@ -690,10 +709,110 @@ button {
   font-weight: 700;
 }
 
+.ios-modal-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.ios-sql-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(48, 209, 88, 0.18);
+  color: var(--ios-green);
+  border: 1px solid rgba(48, 209, 88, 0.45);
+}
+
 .ios-modal-desc {
   font-size: 0.78rem;
   color: var(--ios-text-secondary);
   margin-top: 2px;
+}
+
+/* ================= SQL ROUTES LIST & SAVE ================= */
+.ios-sql-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.ios-sql-routes-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 185px;
+  overflow-y: auto;
+}
+
+.sql-route-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 13px;
+  padding: 8px 11px;
+  transition: border-color 0.16s ease, background 0.16s ease;
+}
+
+.sql-route-row.active {
+  background: rgba(10, 132, 255, 0.18);
+  border-color: rgba(10, 132, 255, 0.65);
+}
+
+.sql-route-info {
+  min-width: 0;
+  flex: 1;
+  cursor: pointer;
+}
+
+.sql-route-name {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sql-route-meta {
+  font-size: 0.7rem;
+  color: var(--ios-text-secondary);
+  margin-top: 2px;
+}
+
+.sql-route-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.sql-save-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.sql-save-row input {
+  flex: 1;
+  min-width: 120px;
+  background: rgba(118, 118, 128, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  padding: 8px 11px;
+  color: #ffffff;
+  font-size: 0.8rem;
 }
 
 .ios-close-btn {
