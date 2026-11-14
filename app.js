@@ -320,6 +320,27 @@ function svgIcon(name, size = 14) {
   }
 }
 
+function roadArrowSvg() {
+  return `
+    <div class="vehicle-pulse"></div>
+    <svg viewBox="0 0 120 120" class="road-arrow-svg" aria-hidden="true">
+      <defs>
+        <linearGradient id="roadFacetLeft" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#6cffab" />
+          <stop offset="100%" stop-color="#30d158" />
+        </linearGradient>
+        <linearGradient id="roadFacetRight" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#28b850" />
+          <stop offset="100%" stop-color="#0f7c33" />
+        </linearGradient>
+      </defs>
+      <polygon points="60,8 106,104 60,82 14,104" fill="#0b1f13" opacity="0.45" transform="translate(0,5)" />
+      <polygon points="60,8 60,82 14,104" fill="url(#roadFacetLeft)" stroke="#ffffff" stroke-width="4" stroke-linejoin="round" />
+      <polygon points="60,8 106,104 60,82" fill="url(#roadFacetRight)" stroke="#ffffff" stroke-width="4" stroke-linejoin="round" />
+    </svg>
+  `;
+}
+
 /* ================= STATE ================= */
 const state = {
   stops: loadSavedStops(),
@@ -345,7 +366,8 @@ const state = {
   gpsWatchId: null,
   lastFrameTime: 0,
 
-  camera3d: true,
+  cameraMode: "street", // "street" = Calle 3D | "aerial" = Aérea 3D | "overview" = 2D Ruta
+  followZoom: 18.8,
   theme: "satellite", // Vista de satélite híbrida por defecto
   showRouteLine: true,
   cleanUiMode: false,
@@ -515,9 +537,10 @@ function initMap() {
     container: "map",
     style: MAP_STYLES[state.theme],
     center: [-87.185, 14.072],
-    zoom: 14,
+    zoom: 18.8,
     maxZoom: 21,
-    pitch: 56,
+    pitch: 74,
+    maxPitch: 82,
     bearing: 0,
     antialias: true
   });
@@ -538,6 +561,12 @@ function initMap() {
 
   state.map.on("zoom", () => {
     updateForkMarkersVisibility();
+  });
+
+  state.map.on("zoomend", (e) => {
+    if (e.originalEvent && state.cameraMode !== "overview") {
+      state.followZoom = state.map.getZoom();
+    }
   });
 
   state.map.on("click", (e) => {
@@ -959,8 +988,12 @@ function renderAllMapData() {
   if (!state.vehicleMarker) {
     const vEl = document.createElement("div");
     vEl.className = "vehicle-marker";
-    vEl.innerHTML = svgIcon("navigation", 14);
-    state.vehicleMarker = new maplibregl.Marker({ element: vEl, rotationAlignment: "map" })
+    vEl.innerHTML = roadArrowSvg();
+    state.vehicleMarker = new maplibregl.Marker({
+      element: vEl,
+      rotationAlignment: "map",
+      pitchAlignment: "map"
+    })
       .setLngLat(state.mainCoords[0])
       .addTo(m);
   }
@@ -978,7 +1011,7 @@ function updateForkMarkersVisibility() {
   state.forkMarkers.forEach(({ el: div, cp }) => {
     const activeCp = activeById.get(cp.id);
     const passed = activeCp ? activeCp.distAlong - curAlong < -35 : false;
-    const shouldHide = zoom < 12.5 || (state.camera3d && passed);
+    const shouldHide = zoom < 12.5 || (state.cameraMode !== "overview" && passed);
     div.classList.toggle("is-hidden", shouldHide);
   });
 }
@@ -1059,8 +1092,9 @@ function jumpToCheckpoint(cp) {
     el.btnSimSpeed.textContent = "1x";
     state.simPlaying = true;
     setPlayButtonUI(true);
-    state.camera3d = true;
-    setCameraButtonUI(true);
+    state.cameraMode = "street";
+    state.followZoom = 18.8;
+    setCameraButtonUI("street");
     updateNavigationHUD();
     focusCameraOnVehicle(true);
     showToast(`Probando desvío: ${cp.shortLabel}`);
@@ -1069,12 +1103,23 @@ function jumpToCheckpoint(cp) {
 
 function focusCameraOnVehicle(immediate = false) {
   if (!state.map || !state.vehiclePos) return;
-  if (state.camera3d) {
+  if (state.cameraMode === "street") {
     const opts = {
       center: state.vehiclePos,
-      zoom: 16.6,
+      zoom: state.followZoom,
+      pitch: 74,
+      bearing: state.vehicleHeading,
+      padding: { top: Math.round(window.innerHeight * 0.34), bottom: 0, left: 0, right: 0 }
+    };
+    if (immediate) state.map.jumpTo(opts);
+    else state.map.easeTo({ ...opts, duration: 220, easing: (t) => t });
+  } else if (state.cameraMode === "aerial") {
+    const opts = {
+      center: state.vehiclePos,
+      zoom: state.followZoom,
       pitch: 56,
-      bearing: state.vehicleHeading
+      bearing: state.vehicleHeading,
+      padding: { top: 0, bottom: 0, left: 0, right: 0 }
     };
     if (immediate) state.map.jumpTo(opts);
     else state.map.easeTo({ ...opts, duration: 220, easing: (t) => t });
@@ -1082,7 +1127,8 @@ function focusCameraOnVehicle(immediate = false) {
     state.map.easeTo({
       center: state.vehiclePos,
       bearing: 0,
-      pitch: 15,
+      pitch: 12,
+      padding: { top: 0, bottom: 0, left: 0, right: 0 },
       duration: immediate ? 0 : 250
     });
   }
@@ -1108,7 +1154,7 @@ function updateNavigationHUD() {
 
   const lookAhead = sampleRouteAtDistance(Math.min(totalDist, curAlong + 90));
   const targetBearing = lookAhead ? calculateBearing(state.vehiclePos, lookAhead.coord) : state.vehicleHeading;
-  const arrowAngle = state.camera3d
+  const arrowAngle = state.cameraMode !== "overview"
     ? normalizeAngle(targetBearing - state.vehicleHeading)
     : targetBearing;
 
@@ -1274,9 +1320,11 @@ function setPlayButtonUI(playing) {
   refreshLucideIcons();
 }
 
-function setCameraButtonUI(is3d) {
-  el.btnToggleCamera.classList.toggle("active", is3d);
-  el.btnToggleCamera.innerHTML = `<i data-lucide="compass" class="ico-md"></i><span>${is3d ? "3D" : "2D"}</span>`;
+function setCameraButtonUI(mode) {
+  const active = mode !== "overview";
+  const label = mode === "street" ? "Calle 3D" : mode === "aerial" ? "Aérea 3D" : "2D Ruta";
+  el.btnToggleCamera.classList.toggle("active", active);
+  el.btnToggleCamera.innerHTML = `<i data-lucide="compass" class="ico-md"></i><span>${label}</span>`;
   refreshLucideIcons();
 }
 
@@ -1504,16 +1552,25 @@ function bindEvents() {
   });
 
   el.btnToggleCamera.addEventListener("click", () => {
-    state.camera3d = !state.camera3d;
-    setCameraButtonUI(state.camera3d);
-    if (!state.camera3d && state.mainCoords.length) {
+    const order = ["street", "aerial", "overview"];
+    state.cameraMode = order[(order.indexOf(state.cameraMode) + 1) % order.length];
+    setCameraButtonUI(state.cameraMode);
+    if (state.cameraMode === "street") {
+      state.followZoom = 18.8;
+      focusCameraOnVehicle(false);
+    } else if (state.cameraMode === "aerial") {
+      state.followZoom = 16.4;
+      focusCameraOnVehicle(false);
+    } else if (state.mainCoords.length) {
       const bounds = state.mainCoords.reduce(
         (b, c) => b.extend(c),
         new maplibregl.LngLatBounds(state.mainCoords[0], state.mainCoords[0])
       );
-      state.map.fitBounds(bounds, { padding: 80, pitch: 15, bearing: 0 });
-    } else {
-      focusCameraOnVehicle(false);
+      state.map.fitBounds(bounds, {
+        padding: { top: 80, bottom: 100, left: 60, right: 60 },
+        pitch: 12,
+        bearing: 0
+      });
     }
   });
 
@@ -1550,11 +1607,17 @@ function bindEvents() {
   });
 
   el.btnZoomIn.addEventListener("click", () => {
-    if (state.map) state.map.zoomIn({ duration: 220 });
+    if (!state.map) return;
+    const nextZoom = Math.min(20.5, Math.max(13, state.map.getZoom() + 0.7));
+    if (state.cameraMode !== "overview") state.followZoom = nextZoom;
+    state.map.easeTo({ zoom: nextZoom, duration: 200 });
   });
 
   el.btnZoomOut.addEventListener("click", () => {
-    if (state.map) state.map.zoomOut({ duration: 220 });
+    if (!state.map) return;
+    const nextZoom = Math.min(20.5, Math.max(13, state.map.getZoom() - 0.7));
+    if (state.cameraMode !== "overview") state.followZoom = nextZoom;
+    state.map.easeTo({ zoom: nextZoom, duration: 200 });
   });
 
   el.btnToggleVoice.addEventListener("click", () => {
