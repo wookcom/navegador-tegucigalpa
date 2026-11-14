@@ -189,6 +189,16 @@ function svgIcon(name, size = 14) {
       return `<svg ${common}><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>`;
     case "git-fork":
       return `<svg ${common}><circle cx="12" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9v1a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V9"/><path d="M12 12v3"/></svg>`;
+    case "chevron-down":
+      return `<svg ${common}><polyline points="6 9 12 15 18 9"/></svg>`;
+    case "compass":
+      return `<svg ${common}><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>`;
+    case "layers":
+      return `<svg ${common}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>`;
+    case "bookmark":
+      return `<svg ${common}><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>`;
+    case "plus":
+      return `<svg ${common}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
     default:
       return `<svg ${common}><circle cx="12" cy="12" r="9"/></svg>`;
   }
@@ -237,7 +247,9 @@ const state = {
   dynamicAvoidFeatures: [],
   dynamicLoopFeatures: [],
   routeArrowFeatures: [],
-  turnChevronFeatures: [],
+  curveIntervals: [],
+  activeCurveKey: "",
+  selectedSqlCategory: "custom",
   totalDistance: 0,
   totalDuration: 0,
 
@@ -274,7 +286,6 @@ const state = {
   audioCtx: null,
   voicePrewarmed: false,
 
-  roadsideWallFeatures: [],
   anticipationMarker: null,
   anticipationEl: null,
   wakeLockSentinel: null,
@@ -332,8 +343,12 @@ const el = {
   btnZoomOut: document.getElementById("btnZoomOut"),
 
   itineraryModal: document.getElementById("itineraryModal"),
+  itinerarySheet: document.getElementById("itinerarySheet"),
+  sheetGrabHandle: document.getElementById("sheetGrabHandle"),
+  btnToggleSheetSize: document.getElementById("btnToggleSheetSize"),
   sqlStatusBadge: document.getElementById("sqlStatusBadge"),
   sqlRoutesList: document.getElementById("sqlRoutesList"),
+  sqlCategoryPills: document.getElementById("sqlCategoryPills"),
   sqlRouteNameInput: document.getElementById("sqlRouteNameInput"),
   btnSaveNewSqlRoute: document.getElementById("btnSaveNewSqlRoute"),
   btnCloseModal: document.getElementById("btnCloseModal"),
@@ -1064,8 +1079,8 @@ function ensureChevronImage(map) {
     }
   }
 
-  if (!map.hasImage("turn-wall-chevron")) {
-    const size = 80;
+  if (!map.hasImage("subtle-ground-chevron")) {
+    const size = 64;
     const canvas = document.createElement("canvas");
     canvas.width = size;
     canvas.height = size;
@@ -1075,37 +1090,16 @@ function ensureChevronImage(map) {
       ctx.lineJoin = "round";
       ctx.lineCap = "round";
 
-      // Placa biselada 3D oscura para contraste sobre asfalto satelital
-      ctx.fillStyle = "rgba(8, 12, 18, 0.90)";
-      ctx.strokeStyle = "rgba(255, 180, 32, 0.72)";
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      ctx.roundRect(6, 4, size - 12, size - 8, 12);
-      ctx.fill();
-      ctx.stroke();
+      ctx.strokeStyle = "rgba(125, 255, 179, 0.92)";
+      ctx.lineWidth = 2.6;
+      drawChevronPath(ctx, 16, 32, 32, 16);
 
-      // Halo exterior oscuro + neón
-      ctx.strokeStyle = "rgba(10, 4, 2, 0.95)";
-      ctx.lineWidth = 11.5;
-      drawChevronPath(ctx, 9, 31, 40, 24);
-      drawChevronPath(ctx, 27, 50, 40, 24);
-      drawChevronPath(ctx, 46, 69, 40, 24);
-
-      // Triple chevron neón 3D estilo videojuego de carreras
-      ctx.strokeStyle = "#ff9f0a";
-      ctx.lineWidth = 6.2;
-      drawChevronPath(ctx, 9, 31, 40, 24);
-
-      ctx.strokeStyle = "#00f5a0";
-      ctx.lineWidth = 6.2;
-      drawChevronPath(ctx, 27, 50, 40, 24);
-
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 5.4;
-      drawChevronPath(ctx, 46, 69, 40, 24);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
+      ctx.lineWidth = 2.4;
+      drawChevronPath(ctx, 32, 48, 32, 16);
 
       const imgData = ctx.getImageData(0, 0, size, size);
-      map.addImage("turn-wall-chevron", { width: size, height: size, data: imgData.data });
+      map.addImage("subtle-ground-chevron", { width: size, height: size, data: imgData.data });
     }
   }
 }
@@ -1114,12 +1108,7 @@ function stripMapLabelsAndBuildings(map) {
   if (!map || typeof map.getStyle !== "function") return;
   const style = map.getStyle();
   if (!style || !Array.isArray(style.layers)) return;
-  const keepIds = new Set([
-    "route-arrows-layer",
-    "turn-chevrons-layer",
-    "roadside-wall-glow",
-    "roadside-wall-3d"
-  ]);
+  const keepIds = new Set(["route-arrows-layer", "curve-ground-chevrons"]);
   for (const layer of style.layers) {
     if (keepIds.has(layer.id)) continue;
     if (layer.type === "symbol" || layer.type === "fill-extrusion") {
@@ -1227,9 +1216,9 @@ function ensureRouteLayers() {
     "avoid-forks-src": { type: "geojson", data: emptyFC() },
     "main-route-src": { type: "geojson", data: emptyFC() },
     "loop-highlight-src": { type: "geojson", data: emptyFC() },
-    "roadside-wall-src": { type: "geojson", data: emptyFC() },
-    "route-arrows-src": { type: "geojson", data: emptyFC() },
-    "turn-chevrons-src": { type: "geojson", data: emptyFC() }
+    "curve-ground-src": { type: "geojson", data: emptyFC() },
+    "curve-ground-point-src": { type: "geojson", data: emptyFC() },
+    "route-arrows-src": { type: "geojson", data: emptyFC() }
   };
 
   for (const [id, spec] of Object.entries(sources)) {
@@ -1352,31 +1341,34 @@ function ensureRouteLayers() {
     });
   }
 
-  if (!m.getLayer("roadside-wall-glow")) {
+  if (!m.getLayer("curve-ground-glow")) {
     m.addLayer({
-      id: "roadside-wall-glow",
-      type: "fill",
-      source: "roadside-wall-src",
+      id: "curve-ground-glow",
+      type: "line",
+      source: "curve-ground-src",
       minzoom: 14,
+      layout: { "line-join": "round", "line-cap": "round" },
       paint: {
-        "fill-color": ["get", "glowColor"],
-        "fill-opacity": 0.45
+        "line-color": ["get", "color"],
+        "line-width": ["interpolate", ["linear"], ["zoom"], 14, 4, 18.5, 10],
+        "line-opacity": 0.13,
+        "line-blur": 4
       }
     });
   }
 
-  if (!m.getLayer("roadside-wall-3d")) {
+  if (!m.getLayer("curve-ground-line")) {
     m.addLayer({
-      id: "roadside-wall-3d",
-      type: "fill-extrusion",
-      source: "roadside-wall-src",
+      id: "curve-ground-line",
+      type: "line",
+      source: "curve-ground-src",
       minzoom: 14,
+      layout: { "line-join": "round", "line-cap": "round" },
       paint: {
-        "fill-extrusion-color": ["get", "color"],
-        "fill-extrusion-height": ["get", "height"],
-        "fill-extrusion-base": ["get", "base"],
-        "fill-extrusion-opacity": 0.94,
-        "fill-extrusion-vertical-gradient": true
+        "line-color": ["get", "color"],
+        "line-width": ["interpolate", ["linear"], ["zoom"], 14, 1.4, 18.5, 2.6],
+        "line-opacity": 0.24,
+        "line-dasharray": [1.2, 2.0]
       }
     });
   }
@@ -1399,15 +1391,15 @@ function ensureRouteLayers() {
     });
   }
 
-  if (!m.getLayer("turn-chevrons-layer")) {
+  if (!m.getLayer("curve-ground-chevrons")) {
     m.addLayer({
-      id: "turn-chevrons-layer",
+      id: "curve-ground-chevrons",
       type: "symbol",
-      source: "turn-chevrons-src",
-      minzoom: 13.5,
+      source: "curve-ground-point-src",
+      minzoom: 14.5,
       layout: {
-        "icon-image": "turn-wall-chevron",
-        "icon-size": ["interpolate", ["linear"], ["zoom"], 13.5, 0.62, 18.5, 1.08],
+        "icon-image": "subtle-ground-chevron",
+        "icon-size": ["interpolate", ["linear"], ["zoom"], 14.5, 0.36, 18.5, 0.58],
         "icon-rotate": ["get", "bearing"],
         "icon-rotation-alignment": "map",
         "icon-pitch-alignment": "map",
@@ -1415,7 +1407,7 @@ function ensureRouteLayers() {
         "icon-ignore-placement": true
       },
       paint: {
-        "icon-opacity": 0.98
+        "icon-opacity": 0.26
       }
     });
   }
@@ -1448,8 +1440,8 @@ function applyRouteLineVisibility() {
   ]) {
     if (m.getLayer(id)) m.setLayoutProperty(id, "visibility", vis);
   }
-  for (const alwaysOnId of ["roadside-wall-glow", "roadside-wall-3d", "turn-chevrons-layer"]) {
-    if (m.getLayer(alwaysOnId)) m.setLayoutProperty(alwaysOnId, "visibility", "visible");
+  for (const subtleId of ["curve-ground-glow", "curve-ground-line", "curve-ground-chevrons"]) {
+    if (m.getLayer(subtleId)) m.setLayoutProperty(subtleId, "visibility", "visible");
   }
 }
 
@@ -1983,76 +1975,6 @@ function buildRouteArrowChevrons(coords, cum) {
   return features;
 }
 
-/** Construye un bloque poligonal 3D extruido para las barreras laterales de curva. */
-function makeExtrudedBarrierBlock(centerCoord, roadHeading, idx, isBrake) {
-  const front = projectPointMeters(centerCoord, roadHeading, 1.3);
-  const back = projectPointMeters(centerCoord, roadHeading + 180, 1.3);
-  const fl = projectPointMeters(front, roadHeading - 90, 0.45);
-  const fr = projectPointMeters(front, roadHeading + 90, 0.45);
-  const br = projectPointMeters(back, roadHeading + 90, 0.45);
-  const bl = projectPointMeters(back, roadHeading - 90, 0.45);
-  const color = isBrake
-    ? idx % 2 === 0
-      ? "#ff453a"
-      : "#ff9f0a"
-    : idx % 2 === 0
-      ? "#00f5a0"
-      : "#ffe600";
-  return {
-    type: "Feature",
-    properties: {
-      height: 3.5,
-      base: 0.2,
-      color,
-      glowColor: isBrake ? "#ff453a" : "#30d158"
-    },
-    geometry: {
-      type: "Polygon",
-      coordinates: [[fl, fr, br, bl, fl]]
-    }
-  };
-}
-
-function buildTurnWallChevrons(coords, cum) {
-  const chevrons = [];
-  const walls = [];
-  const maxD = cum[cum.length - 1] || 0;
-  if (maxD < 30) return { chevrons, walls };
-
-  const turnIntervals = collectTurnGateIntervals(maxD);
-  let blockIdx = 0;
-  for (const span of turnIntervals) {
-    const offsetAngle = span.dir === "left" ? 90 : -90;
-    const offsetDist = span.dir === "left" ? 7.6 : 4.2;
-    const cantAngle = span.dir === "left" ? -22 : 22;
-
-    let cursor = span.start;
-    while (cursor <= span.end && chevrons.length < 1500) {
-      const sample = sampleRouteAtDistance(cursor, false);
-      if (sample) {
-        const edgePt = projectPointMeters(sample.coord, sample.heading + offsetAngle, offsetDist);
-        chevrons.push({
-          type: "Feature",
-          properties: { bearing: (sample.heading + cantAngle + 360) % 360 },
-          geometry: { type: "Point", coordinates: edgePt }
-        });
-      }
-      cursor += 8.4;
-    }
-
-    let wCursor = span.start;
-    while (wCursor <= span.end && walls.length < 1600) {
-      const sample = sampleRouteAtDistance(wCursor, false);
-      if (sample) {
-        const wallPt = projectPointMeters(sample.coord, sample.heading + offsetAngle, offsetDist);
-        walls.push(makeExtrudedBarrierBlock(wallPt, sample.heading, blockIdx++, span.isBrake));
-      }
-      wCursor += 5.2;
-    }
-  }
-  return { chevrons, walls };
-}
-
 function processPrimaryRoute(route) {
   const coords = smoothAndDensifyRouteCoords(route.geometry.coordinates);
   state.mainCoords = coords;
@@ -2090,9 +2012,8 @@ function processPrimaryRoute(route) {
 
   analyzeRouteGeometryAndManeuvers(route, coords, cum, flatSteps);
   state.routeArrowFeatures = buildRouteArrowChevrons(coords, cum);
-  const wallBuild = buildTurnWallChevrons(coords, cum);
-  state.turnChevronFeatures = wallBuild.chevrons;
-  state.roadsideWallFeatures = wallBuild.walls;
+  state.curveIntervals = collectTurnGateIntervals(cum[cum.length - 1] || 0);
+  state.activeCurveKey = "";
 
   el.metricTotalDist.textContent = `${(route.distance / 1000).toFixed(1)} km`;
   el.metricTotalTime.textContent = `${Math.round(route.duration / 60)} min`;
@@ -2186,15 +2107,10 @@ function renderAllMapData() {
   m.getSource("alt-routes-src")?.setData({ type: "FeatureCollection", features: altFeatures });
   m.getSource("avoid-forks-src")?.setData({ type: "FeatureCollection", features: state.dynamicAvoidFeatures });
   m.getSource("loop-highlight-src")?.setData({ type: "FeatureCollection", features: state.dynamicLoopFeatures });
-  m.getSource("roadside-wall-src")?.setData({
-    type: "FeatureCollection",
-    features: state.roadsideWallFeatures || []
-  });
   m.getSource("route-arrows-src")?.setData({ type: "FeatureCollection", features: state.routeArrowFeatures });
-  m.getSource("turn-chevrons-src")?.setData({
-    type: "FeatureCollection",
-    features: state.turnChevronFeatures || []
-  });
+  m.getSource("curve-ground-src")?.setData(emptyFC());
+  m.getSource("curve-ground-point-src")?.setData(emptyFC());
+  state.activeCurveKey = "";
 
   state.stopMarkers.forEach((mk) => mk.remove());
   state.stopMarkers = [];
@@ -2230,28 +2146,13 @@ function renderAllMapData() {
   if (!state.anticipationMarker) {
     const aEl = document.createElement("div");
     aEl.className = "anticipation-3d-marker hidden";
-    aEl.innerHTML = `
-      <div class="ant-float-head">
-        <svg class="ant-arrow-svg" viewBox="0 0 64 64" aria-hidden="true">
-          <defs>
-            <linearGradient id="antArrowGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="#64ff9e"/>
-              <stop offset="100%" stop-color="#0a84ff"/>
-            </linearGradient>
-          </defs>
-          <polygon points="32,56 10,30 22,30 22,8 42,8 42,30 54,30" fill="url(#antArrowGrad)" stroke="#ffffff" stroke-width="3" stroke-linejoin="round"/>
-        </svg>
-        <span class="ant-dist-pill"></span>
-      </div>
-      <div class="ant-laser-stem"></div>
-      <div class="ant-ground-ring"></div>
-    `;
+    aEl.innerHTML = `<div class="ant-ground-ring"></div><span class="ant-dist-pill"></span>`;
     state.anticipationEl = aEl;
     state.anticipationMarker = new maplibregl.Marker({
       element: aEl,
-      anchor: "bottom",
-      pitchAlignment: "viewport",
-      rotationAlignment: "viewport"
+      anchor: "center",
+      pitchAlignment: "map",
+      rotationAlignment: "map"
     })
       .setLngLat(state.mainCoords[0])
       .addTo(m);
@@ -2465,21 +2366,9 @@ function updateHudChevronStrip(dir, isBraking) {
   }
 }
 
-function updateRacingTurnGate(dir, showGate, isBraking) {
-  if (!el.racingTurnGate) return;
-  if (!showGate || (dir !== "left" && dir !== "right")) {
+function updateRacingTurnGate() {
+  if (el.racingTurnGate) {
     el.racingTurnGate.classList.add("hidden");
-    return;
-  }
-  el.racingTurnGate.classList.remove("hidden");
-  el.racingTurnGate.classList.toggle("dir-left", dir === "left");
-  el.racingTurnGate.classList.toggle("dir-right", dir === "right");
-  el.racingTurnGate.classList.toggle("brake-gate", Boolean(isBraking));
-  if (el.racingTurnGate.dataset.dir !== dir) {
-    el.racingTurnGate.dataset.dir = dir;
-    const pts = chevronSvgPath(dir);
-    const chev = `<svg viewBox="0 0 24 24" class="gate-chev" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${pts}</svg>`;
-    el.racingTurnGate.innerHTML = chev.repeat(7);
   }
 }
 
@@ -2690,7 +2579,8 @@ function updateNavigationHUD() {
   }
 
   updateHudChevronStrip(activeLane, isBrakingZone);
-  updateRacingTurnGate(activeLane, showGate, isBrakingZone);
+  updateRacingTurnGate();
+  updateActiveCurveGroundMark(curAlong);
   updateAnticipation3dMarker({
     show: antShow,
     coord: antCoord,
@@ -2700,22 +2590,94 @@ function updateNavigationHUD() {
   });
 }
 
-/** Posiciona y anima el marcador flotante 3D sobre el punto distante de la próxima maniobra. */
+/** Marca sutilmente en el pavimento la trazada de la curva activa o inminente. */
+function updateActiveCurveGroundMark(curAlong) {
+  const m = state.map;
+  if (!m || !state.mapReady) return;
+  const lineSrc = m.getSource("curve-ground-src");
+  const ptSrc = m.getSource("curve-ground-point-src");
+  if (!lineSrc || !ptSrc) return;
+
+  const span = (state.curveIntervals || []).find(
+    (s) => curAlong >= s.start - 260 && curAlong <= s.end + 10
+  );
+  if (!span) {
+    if (state.activeCurveKey !== "") {
+      state.activeCurveKey = "";
+      lineSrc.setData(emptyFC());
+      ptSrc.setData(emptyFC());
+    }
+    return;
+  }
+
+  const maxDist = state.cumDistances[state.cumDistances.length - 1] || span.end;
+  const fromM = Math.max(span.start, curAlong - 4);
+  const toM = Math.min(maxDist, span.end);
+  if (toM - fromM < 6) {
+    if (state.activeCurveKey !== "") {
+      state.activeCurveKey = "";
+      lineSrc.setData(emptyFC());
+      ptSrc.setData(emptyFC());
+    }
+    return;
+  }
+
+  const nextKey = `${Math.round(span.start)}:${Math.floor(fromM / 12)}`;
+  if (state.activeCurveKey === nextKey) return;
+  state.activeCurveKey = nextKey;
+
+  const lineCoords = [];
+  for (let d = fromM; d <= toM; d += 5) {
+    const s = sampleRouteAtDistance(d, true);
+    if (s) lineCoords.push(s.coord);
+  }
+  const endSample = sampleRouteAtDistance(toM, true);
+  if (endSample) lineCoords.push(endSample.coord);
+
+  const color = span.isBrake ? "#ff9f0a" : "#30d158";
+  lineSrc.setData(
+    lineCoords.length >= 2
+      ? {
+          type: "FeatureCollection",
+          features: [
+            {
+              type: "Feature",
+              properties: { color },
+              geometry: { type: "LineString", coordinates: lineCoords }
+            }
+          ]
+        }
+      : emptyFC()
+  );
+
+  const pointFeatures = [];
+  const stepM = Math.max(16, (toM - fromM) / 5.5);
+  for (let d = fromM + 8; d < toM - 4 && pointFeatures.length < 6; d += stepM) {
+    const s = sampleRouteAtDistance(d, true);
+    if (s) {
+      pointFeatures.push({
+        type: "Feature",
+        properties: { bearing: s.heading },
+        geometry: { type: "Point", coordinates: s.coord }
+      });
+    }
+  }
+  ptSrc.setData({ type: "FeatureCollection", features: pointFeatures });
+}
+
+/** Posiciona un anillo plano sutil sobre el suelo en el punto cercano de maniobra. */
 function updateAnticipation3dMarker({ show, coord, cue, distMeters, isBraking }) {
   if (!state.anticipationMarker || !state.anticipationEl) return;
-  if (!show || !coord || !Number.isFinite(distMeters) || distMeters <= 12) {
+  if (!show || !coord || !Number.isFinite(distMeters) || distMeters <= 14 || distMeters > 320) {
     state.anticipationEl.classList.add("hidden");
     return;
   }
   state.anticipationEl.classList.remove("hidden");
+  state.anticipationEl.classList.toggle("is-brake", Boolean(isBraking));
   state.anticipationMarker.setLngLat(coord);
 
-  const head = state.anticipationEl.querySelector(".ant-float-head");
   const pill = state.anticipationEl.querySelector(".ant-dist-pill");
-  const poly = state.anticipationEl.querySelector("polygon");
-  if (head) head.classList.toggle("is-brake", Boolean(isBraking));
   if (pill) pill.textContent = `${cue ? `${cue} · ` : ""}${formatDistance(distMeters)}`;
-  if (poly) poly.setAttribute("fill", isBraking ? "#ff453a" : "url(#antArrowGrad)");
 }
 
 function mapModifierToSpanish(step, distMeters = Infinity) {
@@ -2980,10 +2942,21 @@ function renderLegPills() {
 }
 
 /* ================= SQL ROUTES & ITINERARY CONFIGURATOR MODAL ================= */
+function resolveRouteCategory(route) {
+  if (route.category === "urban" || route.id === "ruta-2-la-reserva" || route.id === "ruta-3-comfort-inn") {
+    return "urban";
+  }
+  if (route.category === "preset" || route.id === "ruta-completa" || route.id === "ruta-1-san-judas") {
+    return "preset";
+  }
+  return "custom";
+}
+
 function openItineraryModal() {
   state.draftStops = structuredClone(state.stops);
   el.searchResults.innerHTML = "";
   if (el.sqlRouteNameInput) el.sqlRouteNameInput.value = "";
+  if (el.itinerarySheet) el.itinerarySheet.classList.remove("sheet-minimized");
   renderSqlRoutesList();
   renderDraftStopsList();
   updateSqlStatusBadge();
@@ -2993,21 +2966,53 @@ function openItineraryModal() {
 function renderSqlRoutesList() {
   if (!el.sqlRoutesList) return;
   const routes = sqlGetAllRoutes();
-  el.sqlRoutesList.innerHTML = routes
-    .map((r) => {
-      const isAct = r.id === state.activeRouteId;
-      const badgeText = isAct ? "Activa en mapa" : "Cargar";
+  const categories = [
+    { key: "preset", title: "Rutas Principales", icon: "compass", sqClass: "sq-blue" },
+    { key: "urban", title: "Tramos Urbanos TGU", icon: "layers", sqClass: "sq-orange" },
+    { key: "custom", title: "Mis Rutas Guardadas", icon: "bookmark", sqClass: "sq-green" }
+  ];
+
+  el.sqlRoutesList.innerHTML = categories
+    .map((cat) => {
+      const items = routes.filter((r) => resolveRouteCategory(r) === cat.key);
+      const rowsHtml = items.length
+        ? items
+            .map((r) => {
+              const isAct = r.id === state.activeRouteId;
+              const badgeText = isAct ? "Activa" : "Cargar";
+              return `
+                <li class="sql-route-row ${isAct ? "active" : ""}">
+                  <div class="sql-route-info" data-sql-select="${escapeHtml(r.id)}">
+                    <div class="sql-route-name">
+                      ${isAct ? `<span class="sql-active-check">${svgIcon("check", 13)}</span>` : ""}
+                      <span>${escapeHtml(r.name)}</span>
+                    </div>
+                    <div class="sql-route-meta">${Number(r.stop_count || 0)} paradas · SQLite</div>
+                  </div>
+                  <div class="sql-route-actions">
+                    <button type="button" class="ios-mini-btn ${isAct ? "" : "ghost"}" data-sql-select="${escapeHtml(r.id)}">${badgeText}</button>
+                    <button type="button" class="stop-btn danger sql-del-btn" data-sql-del="${escapeHtml(r.id)}" title="Eliminar ruta de SQLite" aria-label="Eliminar ruta">${svgIcon("trash", 14)}</button>
+                  </div>
+                </li>
+              `;
+            })
+            .join("")
+        : `<li class="sql-route-row"><span class="sql-route-meta">Sin rutas guardadas en esta categoría</span></li>`;
+
       return `
-        <li class="sql-route-row ${isAct ? "active" : ""}">
-          <div class="sql-route-info" data-sql-select="${escapeHtml(r.id)}">
-            <div class="sql-route-name">${escapeHtml(r.name)}</div>
-            <div class="sql-route-meta">${Number(r.stop_count || 0)} paradas · ${r.category === "preset" ? "Pre-cargada SQL" : "Guardada por usuario"}</div>
-          </div>
-          <div class="sql-route-actions">
-            <button type="button" class="ios-mini-btn ${isAct ? "" : "ghost"}" data-sql-select="${escapeHtml(r.id)}">${badgeText}</button>
-            <button type="button" class="stop-btn danger" data-sql-del="${escapeHtml(r.id)}" title="Eliminar de SQL">${svgIcon("trash", 14)}</button>
-          </div>
-        </li>
+        <details class="ios-cat-group" open>
+          <summary class="ios-cat-summary">
+            <span class="ios-cat-title-wrap">
+              <span class="ios-squircle-icon sq-mini ${cat.sqClass}">${svgIcon(cat.icon, 12)}</span>
+              <span>${cat.title}</span>
+            </span>
+            <span class="ios-cat-right">
+              <span class="ios-cat-count">${items.length}</span>
+              <span class="ios-chevron-ind">${svgIcon("chevron-down", 13)}</span>
+            </span>
+          </summary>
+          <ul class="ios-inset-list">${rowsHtml}</ul>
+        </details>
       `;
     })
     .join("");
@@ -3262,7 +3267,33 @@ function bindEvents() {
   el.btnCloseModal.addEventListener("click", () => el.itineraryModal.classList.add("hidden"));
   el.btnCancelModal.addEventListener("click", () => el.itineraryModal.classList.add("hidden"));
 
-  el.btnRestoreDefault.addEventListener("click", () => {
+  const toggleSheetMinimized = () => {
+    if (el.itinerarySheet) {
+      el.itinerarySheet.classList.toggle("sheet-minimized");
+    }
+  };
+  if (el.btnToggleSheetSize) {
+    el.btnToggleSheetSize.addEventListener("click", toggleSheetMinimized);
+  }
+  if (el.sheetGrabHandle?.parentElement) {
+    el.sheetGrabHandle.parentElement.addEventListener("click", toggleSheetMinimized);
+  }
+
+  if (el.sqlCategoryPills) {
+    el.sqlCategoryPills.querySelectorAll(".sql-cat-pill").forEach((pill) => {
+      pill.addEventListener("click", () => {
+        const nextCat = pill.dataset.cat || "custom";
+        state.selectedSqlCategory = nextCat;
+        el.sqlCategoryPills.querySelectorAll(".sql-cat-pill").forEach((p) => {
+          p.classList.toggle("active", p === pill);
+        });
+      });
+    });
+  }
+
+  el.btnRestoreDefault.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
     sqlRestoreDefaultRoutes();
     loadActiveRouteFromSql();
     state.draftStops = structuredClone(state.stops);
@@ -3286,7 +3317,7 @@ function bindEvents() {
     sqlSaveRoute({
       name: fullName,
       shortLabel: shortLbl,
-      category: "custom",
+      category: state.selectedSqlCategory || "custom",
       stops: state.draftStops,
       makeActive: true
     });
@@ -3298,7 +3329,9 @@ function bindEvents() {
     showToast(`Guardada en SQLite: ${fullName}`);
   });
 
-  el.btnUseMyLocation.addEventListener("click", () => {
+  el.btnUseMyLocation.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
     if (!("geolocation" in navigator)) {
       showToast("GPS no disponible en este dispositivo");
       return;

@@ -167,76 +167,136 @@
       </div>
     </footer>
 
-    <!-- iOS Modal Sheet: Trip Configurator -->
+    <!-- Native iOS Collapsible Inset-Grouped Sheet: SQL Routes Database -->
     <aside class="ios-modal-backdrop hidden" id="itineraryModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-      <div class="ios-modal-sheet">
-        <div class="ios-sheet-handle"></div>
+      <div class="ios-modal-sheet" id="itinerarySheet">
+        <div class="ios-sheet-grabber-bar">
+          <div class="ios-sheet-handle" id="sheetGrabHandle" title="Toca dos veces para contraer o expandir"></div>
+        </div>
         <div class="ios-modal-header">
-          <div>
-            <div class="ios-modal-title-row">
-              <h2 id="modalTitle">Itinerario y Base de Datos SQL</h2>
-              <span class="ios-sql-badge" id="sqlStatusBadge">SQLite · Cargando…</span>
+          <div class="ios-modal-brand">
+            <span class="ios-squircle-icon sq-indigo">
+              <i data-lucide="database" class="ico-sm"></i>
+            </span>
+            <div>
+              <div class="ios-modal-title-row">
+                <h2 id="modalTitle">Rutas y Base de Datos</h2>
+                <span class="ios-sql-badge" id="sqlStatusBadge">SQLite · …</span>
+              </div>
+              <p class="ios-modal-desc">Organizado por categorías · iOS Inset List</p>
             </div>
-            <p class="ios-modal-desc">Administra rutas guardadas en SQLite, reordena paradas o agrega nuevas direcciones.</p>
           </div>
-          <button type="button" class="ios-close-btn" id="btnCloseModal" aria-label="Cerrar">
-            <i data-lucide="x" class="ico-sm"></i>
-          </button>
+          <div class="ios-modal-win-actions">
+            <button type="button" class="ios-close-btn" id="btnToggleSheetSize" title="Contraer o expandir hoja" aria-label="Contraer hoja">
+              <i data-lucide="chevron-down" class="ico-sm"></i>
+            </button>
+            <button type="button" class="ios-close-btn" id="btnCloseModal" aria-label="Cerrar">
+              <i data-lucide="x" class="ico-sm"></i>
+            </button>
+          </div>
         </div>
 
         <div class="ios-modal-body">
-          <div class="ios-sql-section">
-            <div class="ios-section-head">
-              <h3>Rutas guardadas en Base de Datos SQL</h3>
-              <div class="ios-head-actions">
+          <!-- Category 1: SQL Route Catalog -->
+          <details class="ios-group-accordion" open>
+            <summary class="ios-accordion-summary">
+              <span class="ios-acc-left">
+                <span class="ios-squircle-icon sq-blue">
+                  <i data-lucide="compass" class="ico-xs"></i>
+                </span>
+                <span class="ios-acc-title">Catálogo de Rutas SQL</span>
+              </span>
+              <span class="ios-acc-right">
                 <button type="button" class="ios-mini-btn ghost" id="btnRestoreDefault" title="Restaurar rutas iniciales en SQLite">
-                  <i data-lucide="database" class="ico-xs"></i>
-                  <span>Restaurar BD</span>
+                  <i data-lucide="rotate-ccw" class="ico-xs"></i>
+                  <span>Restaurar</span>
                 </button>
+                <i data-lucide="chevron-down" class="ico-xs ios-chevron-ind"></i>
+              </span>
+            </summary>
+            <div class="ios-accordion-content">
+              <div class="ios-sql-categories" id="sqlRoutesList"></div>
+
+              <div class="ios-save-card">
+                <div class="ios-save-card-head">
+                  <span class="ios-squircle-icon sq-amber sq-mini">
+                    <i data-lucide="bookmark" class="ico-xs"></i>
+                  </span>
+                  <span>Guardar ruta actual como nueva</span>
+                </div>
+                <div class="sql-cat-pills" id="sqlCategoryPills" role="radiogroup" aria-label="Categoría de ruta">
+                  <button type="button" class="sql-cat-pill" data-cat="preset">Principales</button>
+                  <button type="button" class="sql-cat-pill" data-cat="urban">Urbanos</button>
+                  <button type="button" class="sql-cat-pill active" data-cat="custom">Guardadas</button>
+                </div>
+                <div class="sql-save-row">
+                  <input type="text" id="sqlRouteNameInput" placeholder="Nombre de ruta (ej. Casa → Trabajo)…" autocomplete="off" />
+                  <button type="button" class="ios-btn ios-btn-green ios-btn-compact" id="btnSaveNewSqlRoute">
+                    <i data-lucide="plus" class="ico-sm"></i>
+                    <span>Guardar</span>
+                  </button>
+                </div>
               </div>
             </div>
-            <ul class="ios-sql-routes-list" id="sqlRoutesList"></ul>
-            <div class="sql-save-row">
-              <input type="text" id="sqlRouteNameInput" placeholder="Nombre para guardar ruta en SQL (ej. Casa → Trabajo)…" autocomplete="off" />
-              <button type="button" class="ios-btn ios-btn-green" id="btnSaveNewSqlRoute">
-                <i data-lucide="save" class="ico-sm"></i>
-                <span>Guardar nueva en SQL</span>
-              </button>
-            </div>
-          </div>
+          </details>
 
-          <div class="ios-stops-section">
-            <div class="ios-section-head">
-              <h3>Paradas de la ruta actual</h3>
-              <div class="ios-head-actions">
+          <!-- Category 2: Active Route Stops -->
+          <details class="ios-group-accordion" open>
+            <summary class="ios-accordion-summary">
+              <span class="ios-acc-left">
+                <span class="ios-squircle-icon sq-orange">
+                  <i data-lucide="route" class="ico-xs"></i>
+                </span>
+                <span class="ios-acc-title">Paradas de la Ruta Activa</span>
+              </span>
+              <span class="ios-acc-right">
                 <button type="button" class="ios-mini-btn" id="btnUseMyLocation">
                   <i data-lucide="locate-fixed" class="ico-xs"></i>
                   <span>Mi GPS</span>
                 </button>
-              </div>
+                <i data-lucide="chevron-down" class="ico-xs ios-chevron-ind"></i>
+              </span>
+            </summary>
+            <div class="ios-accordion-content">
+              <ul class="ios-stops-list ios-inset-list" id="stopsList"></ul>
             </div>
-            <ul class="ios-stops-list" id="stopsList"></ul>
-          </div>
+          </details>
 
-          <div class="ios-add-section">
-            <h3>Agregar dirección</h3>
-            <form id="searchForm" class="ios-search-row">
-              <input type="text" id="searchInput" placeholder="Buscar lugar en Honduras…" autocomplete="off" />
-              <button type="submit" class="ios-btn ios-btn-blue">
-                <i data-lucide="search" class="ico-sm"></i>
-              </button>
-              <button type="button" class="ios-btn ios-btn-glass" id="btnPickOnMap" title="Elegir tocando el mapa">
-                <i data-lucide="map-pin" class="ico-sm"></i>
-                <span>Mapa</span>
-              </button>
-            </form>
-            <ul class="ios-search-results" id="searchResults"></ul>
-          </div>
+          <!-- Category 3: Add Stop / Search Honduras -->
+          <details class="ios-group-accordion">
+            <summary class="ios-accordion-summary">
+              <span class="ios-acc-left">
+                <span class="ios-squircle-icon sq-green">
+                  <i data-lucide="map-pin" class="ico-xs"></i>
+                </span>
+                <span class="ios-acc-title">Agregar Parada o Buscar Lugar</span>
+              </span>
+              <span class="ios-acc-right">
+                <i data-lucide="chevron-down" class="ico-xs ios-chevron-ind"></i>
+              </span>
+            </summary>
+            <div class="ios-accordion-content">
+              <form id="searchForm" class="ios-search-row">
+                <input type="text" id="searchInput" placeholder="Buscar lugar en Honduras…" autocomplete="off" />
+                <button type="submit" class="ios-btn ios-btn-blue ios-btn-compact" aria-label="Buscar">
+                  <i data-lucide="search" class="ico-sm"></i>
+                </button>
+                <button type="button" class="ios-btn ios-btn-glass ios-btn-compact" id="btnPickOnMap" title="Elegir tocando el mapa">
+                  <i data-lucide="map-pin" class="ico-sm"></i>
+                  <span>Mapa</span>
+                </button>
+              </form>
+              <ul class="ios-search-results" id="searchResults"></ul>
+            </div>
+          </details>
         </div>
 
         <div class="ios-modal-footer">
-          <button type="button" class="ios-btn ios-btn-glass" id="btnCancelModal">Cancelar</button>
-          <button type="button" class="ios-btn ios-btn-blue" id="btnApplyItinerary">Guardar en SQL y Trazar</button>
+          <button type="button" class="ios-btn ios-btn-glass" id="btnCancelModal">Cerrar</button>
+          <button type="button" class="ios-btn ios-btn-blue" id="btnApplyItinerary">
+            <i data-lucide="check" class="ico-sm"></i>
+            <span>Guardar y Trazar</span>
+          </button>
         </div>
       </div>
     </aside>
