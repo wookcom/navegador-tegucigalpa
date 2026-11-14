@@ -260,7 +260,7 @@ const state = {
   cameraMode: "street",
   followZoom: 18.05,
   theme: "satellite",
-  showRouteLine: true,
+  showRouteLine: false,
   cleanUiMode: false,
   voiceEnabled: true,
   pickMode: false,
@@ -273,6 +273,13 @@ const state = {
   selectedVoice: null,
   audioCtx: null,
   voicePrewarmed: false,
+
+  roadsideWallFeatures: [],
+  anticipationMarker: null,
+  anticipationEl: null,
+  wakeLockSentinel: null,
+  keepAwakeVideo: null,
+  keepAwakeTimer: null,
 
   map: null,
   mapReady: false,
@@ -840,6 +847,120 @@ function prewarmAudioAndSpeech() {
   }
 }
 
+const RIGHT_LANE_OFFSET_METERS = 3.6;
+
+/** Solicita Screen Wake Lock nativo para evitar que el móvil o PC entren en reposo. */
+async function requestScreenWakeLock() {
+  if (document.visibilityState !== "visible" || !("wakeLock" in navigator)) return;
+  try {
+    if (state.wakeLockSentinel && !state.wakeLockSentinel.released) return;
+    const sentinel = await navigator.wakeLock.request("screen");
+    state.wakeLockSentinel = sentinel;
+    sentinel.addEventListener(
+      "release",
+      () => {
+        if (state.wakeLockSentinel === sentinel) state.wakeLockSentinel = null;
+        if (document.visibilityState === "visible") {
+          setTimeout(() => requestScreenWakeLock(), 600);
+        }
+      },
+      { once: true }
+    );
+  } catch {
+    // El navegador puede exigir gesto de usuario antes de otorgar WakeLock
+  }
+}
+
+/** Inicia un flujo de video canvas mínimo oculto para reforzar anti-hibernación en iOS/Android. */
+function startVideoKeepAwake() {
+  try {
+    if (state.keepAwakeVideo) {
+      if (state.keepAwakeVideo.paused) state.keepAwakeVideo.play().catch(() => {});
+      return;
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = 2;
+    canvas.height = 2;
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.fillStyle = "#010101";
+      ctx.fillRect(0, 0, 2, 2);
+    }
+    if (typeof canvas.captureStream !== "function") return;
+    const stream = canvas.captureStream(1);
+    const video = document.createElement("video");
+    video.muted = true;
+    video.playsInline = true;
+    video.loop = true;
+    video.srcObject = stream;
+    video.setAttribute("aria-hidden", "true");
+    Object.assign(video.style, {
+      position: "fixed",
+      bottom: "0",
+      right: "0",
+      width: "2px",
+      height: "2px",
+      opacity: "0.001",
+      pointerEvents: "none",
+      zIndex: "-1"
+    });
+    document.body.appendChild(video);
+    state.keepAwakeVideo = video;
+    video.play().catch(() => {});
+  } catch {
+    // Video fallback opcional según capacidades del navegador
+  }
+}
+
+/** Ejecuta pulso periódico sub-audible y re-verifica bloqueos de pantalla activos. */
+function triggerKeepAwakePulse() {
+  requestScreenWakeLock();
+  if (state.keepAwakeVideo && state.keepAwakeVideo.paused) {
+    state.keepAwakeVideo.play().catch(() => {});
+  }
+  try {
+    const ctx = state.audioCtx;
+    if (!ctx || ctx.state !== "running") return;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.frequency.setValueAtTime(18, now);
+    gain.gain.setValueAtTime(0.00001, now);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.015);
+  } catch {
+    // Pulso de audio opcional
+  }
+}
+
+/** Inicializa el motor anti-hibernación para mantener activos móviles y PC durante navegación. */
+function initKeepAwakeEngine() {
+  requestScreenWakeLock();
+  startVideoKeepAwake();
+
+  if (!initKeepAwakeEngine._bound) {
+    initKeepAwakeEngine._bound = true;
+    const onWakeGesture = () => {
+      prewarmAudioAndSpeech();
+      requestScreenWakeLock();
+      startVideoKeepAwake();
+    };
+    window.addEventListener("pointerdown", onWakeGesture, { passive: true });
+    window.addEventListener("touchstart", onWakeGesture, { passive: true });
+    window.addEventListener("keydown", onWakeGesture, { passive: true });
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        setTimeout(triggerKeepAwakePulse, 150);
+      }
+    });
+  }
+
+  if (state.keepAwakeTimer) clearInterval(state.keepAwakeTimer);
+  state.keepAwakeTimer = window.setInterval(triggerKeepAwakePulse, 15000);
+}
+
 function playNavChime(stage) {
   if (!state.voiceEnabled || !stage) return;
   try {
@@ -944,7 +1065,7 @@ function ensureChevronImage(map) {
   }
 
   if (!map.hasImage("turn-wall-chevron")) {
-    const size = 64;
+    const size = 80;
     const canvas = document.createElement("canvas");
     canvas.width = size;
     canvas.height = size;
@@ -954,25 +1075,34 @@ function ensureChevronImage(map) {
       ctx.lineJoin = "round";
       ctx.lineCap = "round";
 
-      // Halo oscuro
-      ctx.strokeStyle = "rgba(18, 6, 4, 0.92)";
-      ctx.lineWidth = 9.5;
-      drawChevronPath(ctx, 7, 25, 32, 20);
-      drawChevronPath(ctx, 22, 40, 32, 20);
-      drawChevronPath(ctx, 37, 55, 32, 20);
+      // Placa biselada 3D oscura para contraste sobre asfalto satelital
+      ctx.fillStyle = "rgba(8, 12, 18, 0.90)";
+      ctx.strokeStyle = "rgba(255, 180, 32, 0.72)";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.roundRect(6, 4, size - 12, size - 8, 12);
+      ctx.fill();
+      ctx.stroke();
 
-      // Triple chevron luminoso estilo videojuego de carreras
+      // Halo exterior oscuro + neón
+      ctx.strokeStyle = "rgba(10, 4, 2, 0.95)";
+      ctx.lineWidth = 11.5;
+      drawChevronPath(ctx, 9, 31, 40, 24);
+      drawChevronPath(ctx, 27, 50, 40, 24);
+      drawChevronPath(ctx, 46, 69, 40, 24);
+
+      // Triple chevron neón 3D estilo videojuego de carreras
       ctx.strokeStyle = "#ff9f0a";
-      ctx.lineWidth = 5.2;
-      drawChevronPath(ctx, 7, 25, 32, 20);
+      ctx.lineWidth = 6.2;
+      drawChevronPath(ctx, 9, 31, 40, 24);
 
-      ctx.strokeStyle = "#ffe600";
-      ctx.lineWidth = 5.2;
-      drawChevronPath(ctx, 22, 40, 32, 20);
+      ctx.strokeStyle = "#00f5a0";
+      ctx.lineWidth = 6.2;
+      drawChevronPath(ctx, 27, 50, 40, 24);
 
       ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 4.5;
-      drawChevronPath(ctx, 37, 55, 32, 20);
+      ctx.lineWidth = 5.4;
+      drawChevronPath(ctx, 46, 69, 40, 24);
 
       const imgData = ctx.getImageData(0, 0, size, size);
       map.addImage("turn-wall-chevron", { width: size, height: size, data: imgData.data });
@@ -984,7 +1114,12 @@ function stripMapLabelsAndBuildings(map) {
   if (!map || typeof map.getStyle !== "function") return;
   const style = map.getStyle();
   if (!style || !Array.isArray(style.layers)) return;
-  const keepIds = new Set(["route-arrows-layer", "turn-chevrons-layer"]);
+  const keepIds = new Set([
+    "route-arrows-layer",
+    "turn-chevrons-layer",
+    "roadside-wall-glow",
+    "roadside-wall-3d"
+  ]);
   for (const layer of style.layers) {
     if (keepIds.has(layer.id)) continue;
     if (layer.type === "symbol" || layer.type === "fill-extrusion") {
@@ -1092,6 +1227,7 @@ function ensureRouteLayers() {
     "avoid-forks-src": { type: "geojson", data: emptyFC() },
     "main-route-src": { type: "geojson", data: emptyFC() },
     "loop-highlight-src": { type: "geojson", data: emptyFC() },
+    "roadside-wall-src": { type: "geojson", data: emptyFC() },
     "route-arrows-src": { type: "geojson", data: emptyFC() },
     "turn-chevrons-src": { type: "geojson", data: emptyFC() }
   };
@@ -1216,6 +1352,35 @@ function ensureRouteLayers() {
     });
   }
 
+  if (!m.getLayer("roadside-wall-glow")) {
+    m.addLayer({
+      id: "roadside-wall-glow",
+      type: "fill",
+      source: "roadside-wall-src",
+      minzoom: 14,
+      paint: {
+        "fill-color": ["get", "glowColor"],
+        "fill-opacity": 0.45
+      }
+    });
+  }
+
+  if (!m.getLayer("roadside-wall-3d")) {
+    m.addLayer({
+      id: "roadside-wall-3d",
+      type: "fill-extrusion",
+      source: "roadside-wall-src",
+      minzoom: 14,
+      paint: {
+        "fill-extrusion-color": ["get", "color"],
+        "fill-extrusion-height": ["get", "height"],
+        "fill-extrusion-base": ["get", "base"],
+        "fill-extrusion-opacity": 0.94,
+        "fill-extrusion-vertical-gradient": true
+      }
+    });
+  }
+
   if (!m.getLayer("route-arrows-layer")) {
     m.addLayer({
       id: "route-arrows-layer",
@@ -1242,12 +1407,15 @@ function ensureRouteLayers() {
       minzoom: 13.5,
       layout: {
         "icon-image": "turn-wall-chevron",
-        "icon-size": ["interpolate", ["linear"], ["zoom"], 13.5, 0.55, 18.5, 0.95],
+        "icon-size": ["interpolate", ["linear"], ["zoom"], 13.5, 0.62, 18.5, 1.08],
         "icon-rotate": ["get", "bearing"],
         "icon-rotation-alignment": "map",
         "icon-pitch-alignment": "map",
         "icon-allow-overlap": true,
         "icon-ignore-placement": true
+      },
+      paint: {
+        "icon-opacity": 0.98
       }
     });
   }
@@ -1257,18 +1425,31 @@ function ensureRouteLayers() {
 
 function applyRouteLineVisibility() {
   const m = state.map;
+  if (el.btnToggleRouteLine) {
+    el.btnToggleRouteLine.classList.toggle("active", state.showRouteLine);
+    el.btnToggleRouteLine.title = state.showRouteLine
+      ? "Ocultar ruta verde"
+      : "Mostrar ruta verde";
+    el.btnToggleRouteLine.innerHTML = `<i data-lucide="${state.showRouteLine ? "route" : "eye-off"}" class="ico-md"></i>`;
+    if (typeof refreshLucideIcons === "function") refreshLucideIcons();
+  }
   if (!m || !state.mapReady) return;
   const vis = state.showRouteLine ? "visible" : "none";
   for (const id of [
+    "alt-routes-layer",
+    "avoid-forks-casing",
+    "avoid-forks-layer",
     "main-route-glow",
     "main-route-casing",
     "main-route-layer",
     "loop-highlight-halo",
     "loop-highlight-layer",
-    "route-arrows-layer",
-    "turn-chevrons-layer"
+    "route-arrows-layer"
   ]) {
     if (m.getLayer(id)) m.setLayoutProperty(id, "visibility", vis);
+  }
+  for (const alwaysOnId of ["roadside-wall-glow", "roadside-wall-3d", "turn-chevrons-layer"]) {
+    if (m.getLayer(alwaysOnId)) m.setLayoutProperty(alwaysOnId, "visibility", "visible");
   }
 }
 
@@ -1689,12 +1870,55 @@ function sliceCoordsByDistance(coords, cum, startM, endM) {
   return out;
 }
 
+/** Suaviza vértices bruscos y densifica segmentos largos manteniendo fidelidad en bucles y rotondas. */
+function smoothAndDensifyRouteCoords(rawCoords) {
+  if (!Array.isArray(rawCoords) || rawCoords.length < 3) return rawCoords || [];
+  const dense = [rawCoords[0]];
+  for (let i = 0; i < rawCoords.length - 1; i++) {
+    const a = rawCoords[i];
+    const b = rawCoords[i + 1];
+    const segLen = haversineMeters(a, b);
+    if (segLen > 10) {
+      const steps = Math.min(24, Math.ceil(segLen / 7.5));
+      for (let s = 1; s < steps; s++) {
+        const t = s / steps;
+        dense.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+      }
+    }
+    dense.push(b);
+  }
+  const smoothed = [dense[0]];
+  for (let i = 1; i < dense.length - 1; i++) {
+    const prev = dense[i - 1];
+    const curr = dense[i];
+    const next = dense[i + 1];
+    smoothed.push([
+      prev[0] * 0.15 + curr[0] * 0.70 + next[0] * 0.15,
+      prev[1] * 0.15 + curr[1] * 0.70 + next[1] * 0.15
+    ]);
+  }
+  smoothed.push(dense[dense.length - 1]);
+  return smoothed;
+}
+
 function collectTurnGateIntervals(maxD) {
   const spans = [];
   for (const cp of state.activeCheckpoints) {
     const startM = Math.max(0, cp.distAlong - 90);
     const endM = Math.min(maxD - 10, (cp.endDistAlong || cp.distAlong + 35) + 15);
-    if (endM > startM) spans.push([startM, endM]);
+    if (endM > startM) {
+      spans.push({
+        start: startM,
+        end: endM,
+        dir: cp.takeLane === "left" ? "left" : "right",
+        isBrake: Boolean(
+          (cp.recommendedSpeed && cp.recommendedSpeed <= 40) ||
+            cp.kind === "hairpin" ||
+            cp.kind === "loop270" ||
+            cp.kind === "roundabout"
+        )
+      });
+    }
   }
   for (const st of state.steps) {
     const m = st.modifier || "straight";
@@ -1706,17 +1930,30 @@ function collectTurnGateIntervals(maxD) {
     if (!isTurnStep) continue;
     const startM = Math.max(0, st.distAlong - 90);
     const endM = Math.min(maxD - 10, st.distAlong + 30);
-    if (endM > startM) spans.push([startM, endM]);
+    if (endM > startM) {
+      spans.push({
+        start: startM,
+        end: endM,
+        dir: m.includes("left") || m === "uturn" ? "left" : "right",
+        isBrake:
+          st.type === "roundabout" ||
+          st.type === "rotary" ||
+          st.type === "roundabout turn" ||
+          m.includes("sharp") ||
+          m === "uturn"
+      });
+    }
   }
   if (!spans.length) return [];
-  spans.sort((a, b) => a[0] - b[0]);
-  const merged = [spans[0]];
+  spans.sort((a, b) => a.start - b.start);
+  const merged = [{ ...spans[0] }];
   for (let i = 1; i < spans.length; i++) {
     const last = merged[merged.length - 1];
-    if (spans[i][0] <= last[1] + 15) {
-      last[1] = Math.max(last[1], spans[i][1]);
+    if (spans[i].start <= last.end + 15) {
+      last.end = Math.max(last.end, spans[i].end);
+      last.isBrake = last.isBrake || spans[i].isBrake;
     } else {
-      merged.push(spans[i]);
+      merged.push({ ...spans[i] });
     }
   }
   return merged;
@@ -1730,9 +1967,9 @@ function buildRouteArrowChevrons(coords, cum) {
   const turnIntervals = collectTurnGateIntervals(maxD);
   let cursor = 26;
   while (cursor < maxD - 15) {
-    const insideTurn = turnIntervals.some(([a, b]) => cursor >= a && cursor <= b);
+    const insideTurn = turnIntervals.some((span) => cursor >= span.start && cursor <= span.end);
     if (!insideTurn) {
-      const sample = sampleRouteAtDistance(cursor);
+      const sample = sampleRouteAtDistance(cursor, false);
       if (sample) {
         features.push({
           type: "Feature",
@@ -1746,31 +1983,78 @@ function buildRouteArrowChevrons(coords, cum) {
   return features;
 }
 
+/** Construye un bloque poligonal 3D extruido para las barreras laterales de curva. */
+function makeExtrudedBarrierBlock(centerCoord, roadHeading, idx, isBrake) {
+  const front = projectPointMeters(centerCoord, roadHeading, 1.3);
+  const back = projectPointMeters(centerCoord, roadHeading + 180, 1.3);
+  const fl = projectPointMeters(front, roadHeading - 90, 0.45);
+  const fr = projectPointMeters(front, roadHeading + 90, 0.45);
+  const br = projectPointMeters(back, roadHeading + 90, 0.45);
+  const bl = projectPointMeters(back, roadHeading - 90, 0.45);
+  const color = isBrake
+    ? idx % 2 === 0
+      ? "#ff453a"
+      : "#ff9f0a"
+    : idx % 2 === 0
+      ? "#00f5a0"
+      : "#ffe600";
+  return {
+    type: "Feature",
+    properties: {
+      height: 3.5,
+      base: 0.2,
+      color,
+      glowColor: isBrake ? "#ff453a" : "#30d158"
+    },
+    geometry: {
+      type: "Polygon",
+      coordinates: [[fl, fr, br, bl, fl]]
+    }
+  };
+}
+
 function buildTurnWallChevrons(coords, cum) {
-  const features = [];
+  const chevrons = [];
+  const walls = [];
   const maxD = cum[cum.length - 1] || 0;
-  if (maxD < 30) return features;
+  if (maxD < 30) return { chevrons, walls };
 
   const turnIntervals = collectTurnGateIntervals(maxD);
-  for (const [startM, endM] of turnIntervals) {
-    let cursor = startM;
-    while (cursor <= endM && features.length < 1500) {
-      const sample = sampleRouteAtDistance(cursor);
+  let blockIdx = 0;
+  for (const span of turnIntervals) {
+    const offsetAngle = span.dir === "left" ? 90 : -90;
+    const offsetDist = span.dir === "left" ? 7.6 : 4.2;
+    const cantAngle = span.dir === "left" ? -22 : 22;
+
+    let cursor = span.start;
+    while (cursor <= span.end && chevrons.length < 1500) {
+      const sample = sampleRouteAtDistance(cursor, false);
       if (sample) {
-        features.push({
+        const edgePt = projectPointMeters(sample.coord, sample.heading + offsetAngle, offsetDist);
+        chevrons.push({
           type: "Feature",
-          properties: { bearing: sample.heading },
-          geometry: { type: "Point", coordinates: sample.coord }
+          properties: { bearing: (sample.heading + cantAngle + 360) % 360 },
+          geometry: { type: "Point", coordinates: edgePt }
         });
       }
-      cursor += 9;
+      cursor += 8.4;
+    }
+
+    let wCursor = span.start;
+    while (wCursor <= span.end && walls.length < 1600) {
+      const sample = sampleRouteAtDistance(wCursor, false);
+      if (sample) {
+        const wallPt = projectPointMeters(sample.coord, sample.heading + offsetAngle, offsetDist);
+        walls.push(makeExtrudedBarrierBlock(wallPt, sample.heading, blockIdx++, span.isBrake));
+      }
+      wCursor += 5.2;
     }
   }
-  return features;
+  return { chevrons, walls };
 }
 
 function processPrimaryRoute(route) {
-  const coords = route.geometry.coordinates;
+  const coords = smoothAndDensifyRouteCoords(route.geometry.coordinates);
   state.mainCoords = coords;
   state.totalDistance = route.distance;
   state.totalDuration = route.duration;
@@ -1806,7 +2090,9 @@ function processPrimaryRoute(route) {
 
   analyzeRouteGeometryAndManeuvers(route, coords, cum, flatSteps);
   state.routeArrowFeatures = buildRouteArrowChevrons(coords, cum);
-  state.turnChevronFeatures = buildTurnWallChevrons(coords, cum);
+  const wallBuild = buildTurnWallChevrons(coords, cum);
+  state.turnChevronFeatures = wallBuild.chevrons;
+  state.roadsideWallFeatures = wallBuild.walls;
 
   el.metricTotalDist.textContent = `${(route.distance / 1000).toFixed(1)} km`;
   el.metricTotalTime.textContent = `${Math.round(route.duration / 60)} min`;
@@ -1900,6 +2186,10 @@ function renderAllMapData() {
   m.getSource("alt-routes-src")?.setData({ type: "FeatureCollection", features: altFeatures });
   m.getSource("avoid-forks-src")?.setData({ type: "FeatureCollection", features: state.dynamicAvoidFeatures });
   m.getSource("loop-highlight-src")?.setData({ type: "FeatureCollection", features: state.dynamicLoopFeatures });
+  m.getSource("roadside-wall-src")?.setData({
+    type: "FeatureCollection",
+    features: state.roadsideWallFeatures || []
+  });
   m.getSource("route-arrows-src")?.setData({ type: "FeatureCollection", features: state.routeArrowFeatures });
   m.getSource("turn-chevrons-src")?.setData({
     type: "FeatureCollection",
@@ -1937,28 +2227,46 @@ function renderAllMapData() {
       .addTo(m);
   }
 
+  if (!state.anticipationMarker) {
+    const aEl = document.createElement("div");
+    aEl.className = "anticipation-3d-marker hidden";
+    aEl.innerHTML = `
+      <div class="ant-float-head">
+        <svg class="ant-arrow-svg" viewBox="0 0 64 64" aria-hidden="true">
+          <defs>
+            <linearGradient id="antArrowGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#64ff9e"/>
+              <stop offset="100%" stop-color="#0a84ff"/>
+            </linearGradient>
+          </defs>
+          <polygon points="32,56 10,30 22,30 22,8 42,8 42,30 54,30" fill="url(#antArrowGrad)" stroke="#ffffff" stroke-width="3" stroke-linejoin="round"/>
+        </svg>
+        <span class="ant-dist-pill"></span>
+      </div>
+      <div class="ant-laser-stem"></div>
+      <div class="ant-ground-ring"></div>
+    `;
+    state.anticipationEl = aEl;
+    state.anticipationMarker = new maplibregl.Marker({
+      element: aEl,
+      anchor: "bottom",
+      pitchAlignment: "viewport",
+      rotationAlignment: "viewport"
+    })
+      .setLngLat(state.mainCoords[0])
+      .addTo(m);
+  }
+
   applyRouteLineVisibility();
 }
 
 /* ================= VEHICLE POSITION, 3D ARROW, LOOP/ROUNDABOUT HUD & VOICE ================= */
-function sampleRouteAtDistance(meters) {
-  const cum = state.cumDistances;
-  const coords = state.mainCoords;
+/** Interpola la coordenada central cruda a una distancia exacta sobre la ruta. */
+function rawCoordAtDistance(cum, coords, meters) {
   if (!coords.length) return null;
-  if (meters <= 0) {
-    return {
-      coord: coords[0],
-      heading: coords.length > 1 ? calculateBearing(coords[0], coords[1]) : 0
-    };
-  }
+  if (meters <= 0) return coords[0];
   const maxDist = cum[cum.length - 1];
-  if (meters >= maxDist) {
-    const n = coords.length;
-    return {
-      coord: coords[n - 1],
-      heading: n > 1 ? calculateBearing(coords[n - 2], coords[n - 1]) : 0
-    };
-  }
+  if (meters >= maxDist) return coords[coords.length - 1];
   let lo = 0;
   let hi = cum.length - 1;
   while (lo < hi - 1) {
@@ -1968,10 +2276,36 @@ function sampleRouteAtDistance(meters) {
   }
   const segLen = cum[hi] - cum[lo] || 1;
   const t = (meters - cum[lo]) / segLen;
-  const lng = coords[lo][0] + (coords[hi][0] - coords[lo][0]) * t;
-  const lat = coords[lo][1] + (coords[hi][1] - coords[lo][1]) * t;
-  const heading = calculateBearing(coords[lo], coords[hi]);
-  return { coord: [lng, lat], heading };
+  return [
+    coords[lo][0] + (coords[hi][0] - coords[lo][0]) * t,
+    coords[lo][1] + (coords[hi][1] - coords[lo][1]) * t
+  ];
+}
+
+function sampleRouteAtDistance(meters, applyLaneOffset = true) {
+  const cum = state.cumDistances;
+  const coords = state.mainCoords;
+  if (!coords.length) return null;
+  const maxDist = cum[cum.length - 1] || 0;
+  const clamped = Math.max(0, Math.min(maxDist, meters));
+  const rawCoord = rawCoordAtDistance(cum, coords, clamped);
+  if (!rawCoord) return null;
+
+  const backCoord = rawCoordAtDistance(cum, coords, Math.max(0, clamped - 6));
+  const fwdCoord = rawCoordAtDistance(cum, coords, Math.min(maxDist, clamped + 6));
+  let heading = 0;
+  if (backCoord && fwdCoord && haversineMeters(backCoord, fwdCoord) > 0.2) {
+    heading = calculateBearing(backCoord, fwdCoord);
+  } else if (coords.length > 1) {
+    heading = calculateBearing(coords[0], coords[1]);
+  }
+
+  const coord =
+    applyLaneOffset && RIGHT_LANE_OFFSET_METERS > 0
+      ? projectPointMeters(rawCoord, heading + 90, RIGHT_LANE_OFFSET_METERS)
+      : rawCoord;
+
+  return { coord, heading };
 }
 
 function resetVehicleToStart() {
@@ -2231,6 +2565,11 @@ function updateNavigationHUD() {
   let activeLane = "center";
   let isCruiseStraight = false;
   let showGate = false;
+  let antShow = false;
+  let antCoord = null;
+  let antCue = "";
+  let antDist = 0;
+  let antBrake = isBrakingZone;
 
   if (nearestCp) {
     state.activeCheckpointId = nearestCp.id;
@@ -2268,6 +2607,22 @@ function updateNavigationHUD() {
     showGate = !state.cleanUiMode && (isInside || entryDist <= 280);
     highlightLanes(activeLane, true);
 
+    if (!isInside && entryDist > 12 && entryDist <= 650) {
+      const cpSample = sampleRouteAtDistance(nearestCp.distAlong, true);
+      antShow = true;
+      antCoord = cpSample ? cpSample.coord : nearestCp.coord;
+      antCue = hudCue;
+      antDist = entryDist;
+      antBrake = isBrakingZone || Boolean(nearestCp.recommendedSpeed && nearestCp.recommendedSpeed <= 40);
+    } else if (isInside && dispDist > 12 && dispDist <= 300) {
+      const exitDistAlong = nearestCp.endDistAlong || nearestCp.distAlong;
+      const exitSample = sampleRouteAtDistance(exitDistAlong, true);
+      antShow = true;
+      antCoord = exitSample ? exitSample.coord : nearestCp.coord;
+      antCue = "SALIDA";
+      antDist = dispDist;
+    }
+
     const effectiveDelta = entryDist - leadCompMeters;
     const prepTrigger = Math.min(580, Math.max(300, speedMps * 9));
     const actionTrigger = Math.min(200, Math.max(85, speedMps * 4));
@@ -2304,7 +2659,23 @@ function updateNavigationHUD() {
     const effectiveStepDist = nextStepDist - leadCompMeters;
     const isTurnOrArrive =
       nextStep &&
-      (nextStep.type === "arrive" || (nextStep.modifier && !nextStep.modifier.includes("straight")));
+      (nextStep.type === "arrive" ||
+        nextStep.type === "roundabout" ||
+        nextStep.type === "rotary" ||
+        nextStep.type === "roundabout turn" ||
+        (nextStep.modifier && !nextStep.modifier.includes("straight")));
+
+    if (isTurnOrArrive && nextStepDist > 12 && nextStepDist <= 450) {
+      const stSample = sampleRouteAtDistance(nextStep.distAlong, true);
+      antShow = true;
+      antCoord = stSample ? stSample.coord : nextStep.coord;
+      antCue = cue;
+      antDist = nextStepDist;
+      antBrake =
+        isBrakingZone ||
+        Boolean(nextStep.modifier && (nextStep.modifier.includes("sharp") || nextStep.modifier === "uturn"));
+    }
+
     if (isTurnOrArrive && effectiveStepDist > 12) {
       const prepStepTrigger = Math.min(450, Math.max(260, speedMps * 8));
       const actionStepTrigger = Math.min(180, Math.max(80, speedMps * 3.8));
@@ -2320,6 +2691,31 @@ function updateNavigationHUD() {
 
   updateHudChevronStrip(activeLane, isBrakingZone);
   updateRacingTurnGate(activeLane, showGate, isBrakingZone);
+  updateAnticipation3dMarker({
+    show: antShow,
+    coord: antCoord,
+    cue: antCue,
+    distMeters: antDist,
+    isBraking: antBrake
+  });
+}
+
+/** Posiciona y anima el marcador flotante 3D sobre el punto distante de la próxima maniobra. */
+function updateAnticipation3dMarker({ show, coord, cue, distMeters, isBraking }) {
+  if (!state.anticipationMarker || !state.anticipationEl) return;
+  if (!show || !coord || !Number.isFinite(distMeters) || distMeters <= 12) {
+    state.anticipationEl.classList.add("hidden");
+    return;
+  }
+  state.anticipationEl.classList.remove("hidden");
+  state.anticipationMarker.setLngLat(coord);
+
+  const head = state.anticipationEl.querySelector(".ant-float-head");
+  const pill = state.anticipationEl.querySelector(".ant-dist-pill");
+  const poly = state.anticipationEl.querySelector("polygon");
+  if (head) head.classList.toggle("is-brake", Boolean(isBraking));
+  if (pill) pill.textContent = `${cue ? `${cue} · ` : ""}${formatDistance(distMeters)}`;
+  if (poly) poly.setAttribute("fill", isBraking ? "#ff453a" : "url(#antArrowGrad)");
 }
 
 function mapModifierToSpanish(step, distMeters = Infinity) {
@@ -2961,6 +3357,7 @@ function bindEvents() {
 document.addEventListener("DOMContentLoaded", async () => {
   refreshLucideIcons();
   initVoiceEngine();
+  initKeepAwakeEngine();
   await initSqlDatabase();
   loadActiveRouteFromSql();
   initMap();
