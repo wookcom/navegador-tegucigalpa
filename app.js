@@ -2146,13 +2146,28 @@ function renderAllMapData() {
   if (!state.anticipationMarker) {
     const aEl = document.createElement("div");
     aEl.className = "anticipation-3d-marker hidden";
-    aEl.innerHTML = `<div class="ant-ground-ring"></div><span class="ant-dist-pill"></span>`;
+    aEl.innerHTML = `
+      <div class="ant-float-head">
+        <svg class="ant-arrow-svg" viewBox="0 0 64 64" aria-hidden="true">
+          <defs>
+            <linearGradient id="antArrowGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#64ff9e"/>
+              <stop offset="100%" stop-color="#0a84ff"/>
+            </linearGradient>
+          </defs>
+          <polygon points="32,56 10,30 22,30 22,8 42,8 42,30 54,30" fill="url(#antArrowGrad)" stroke="#ffffff" stroke-width="3" stroke-linejoin="round"/>
+        </svg>
+        <span class="ant-dist-pill"></span>
+      </div>
+      <div class="ant-laser-stem"></div>
+      <div class="ant-ground-ring"></div>
+    `;
     state.anticipationEl = aEl;
     state.anticipationMarker = new maplibregl.Marker({
       element: aEl,
-      anchor: "center",
-      pitchAlignment: "map",
-      rotationAlignment: "map"
+      anchor: "bottom",
+      pitchAlignment: "viewport",
+      rotationAlignment: "viewport"
     })
       .setLngLat(state.mainCoords[0])
       .addTo(m);
@@ -2454,11 +2469,22 @@ function updateNavigationHUD() {
   let activeLane = "center";
   let isCruiseStraight = false;
   let showGate = false;
+  const horizonMax =
+    state.cameraMode === "street" ? 155 : state.cameraMode === "aerial" ? 320 : Infinity;
+  const projectVisualCoord = (targetAlong) => {
+    const clampedTarget = Math.min(totalDist, Math.max(curAlong + 6, targetAlong));
+    const visualAlong = Number.isFinite(horizonMax)
+      ? Math.min(clampedTarget, curAlong + horizonMax)
+      : clampedTarget;
+    const sample = sampleRouteAtDistance(visualAlong, true);
+    return sample ? sample.coord : null;
+  };
   let antShow = false;
   let antCoord = null;
   let antCue = "";
   let antDist = 0;
   let antBrake = isBrakingZone;
+  let antDir = "center";
 
   if (nearestCp) {
     state.activeCheckpointId = nearestCp.id;
@@ -2496,21 +2522,13 @@ function updateNavigationHUD() {
     showGate = !state.cleanUiMode && (isInside || entryDist <= 280);
     highlightLanes(activeLane, true);
 
-    if (!isInside && entryDist > 12 && entryDist <= 650) {
-      const cpSample = sampleRouteAtDistance(nearestCp.distAlong, true);
-      antShow = true;
-      antCoord = cpSample ? cpSample.coord : nearestCp.coord;
-      antCue = hudCue;
-      antDist = entryDist;
-      antBrake = isBrakingZone || Boolean(nearestCp.recommendedSpeed && nearestCp.recommendedSpeed <= 40);
-    } else if (isInside && dispDist > 12 && dispDist <= 300) {
-      const exitDistAlong = nearestCp.endDistAlong || nearestCp.distAlong;
-      const exitSample = sampleRouteAtDistance(exitDistAlong, true);
-      antShow = true;
-      antCoord = exitSample ? exitSample.coord : nearestCp.coord;
-      antCue = "SALIDA";
-      antDist = dispDist;
-    }
+    const targetAlong = isInside ? nearestCp.endDistAlong || nearestCp.distAlong : nearestCp.distAlong;
+    antShow = totalDist - curAlong > 8 && dispDist > 6;
+    antCoord = projectVisualCoord(targetAlong) || nearestCp.coord;
+    antCue = isInside ? "SALIDA" : hudCue;
+    antDist = dispDist;
+    antDir = activeLane;
+    antBrake = isBrakingZone || Boolean(nearestCp.recommendedSpeed && nearestCp.recommendedSpeed <= 40);
 
     const effectiveDelta = entryDist - leadCompMeters;
     const prepTrigger = Math.min(580, Math.max(300, speedMps * 9));
@@ -2554,15 +2572,57 @@ function updateNavigationHUD() {
         nextStep.type === "roundabout turn" ||
         (nextStep.modifier && !nextStep.modifier.includes("straight")));
 
-    if (isTurnOrArrive && nextStepDist > 12 && nextStepDist <= 450) {
-      const stSample = sampleRouteAtDistance(nextStep.distAlong, true);
-      antShow = true;
-      antCoord = stSample ? stSample.coord : nextStep.coord;
-      antCue = cue;
-      antDist = nextStepDist;
-      antBrake =
-        isBrakingZone ||
-        Boolean(nextStep.modifier && (nextStep.modifier.includes("sharp") || nextStep.modifier === "uturn"));
+    const nextCpAhead = state.activeCheckpoints.find((cp) => cp.distAlong > curAlong + 10);
+    const nextActionStep =
+      state.steps.find(
+        (st) =>
+          st.distAlong > curAlong + 10 &&
+          (st.type === "arrive" ||
+            st.type === "roundabout" ||
+            st.type === "rotary" ||
+            st.type === "roundabout turn" ||
+            (st.modifier && !st.modifier.includes("straight")))
+      ) || nextStep;
+
+    const cpDelta = nextCpAhead ? nextCpAhead.distAlong - curAlong : Infinity;
+    const stepDelta = nextActionStep ? Math.max(0, nextActionStep.distAlong - curAlong) : Infinity;
+
+    if (totalDist - curAlong > 8) {
+      if (cpDelta < stepDelta && nextCpAhead) {
+        antShow = true;
+        antCoord = projectVisualCoord(nextCpAhead.distAlong) || nextCpAhead.coord;
+        antDist = cpDelta;
+        antCue =
+          nextCpAhead.kind === "roundabout"
+            ? "ROTONDA"
+            : nextCpAhead.kind === "loop270"
+              ? nextCpAhead.takeLane === "left"
+                ? "BUCLE IZQ"
+                : "BUCLE DER"
+              : nextCpAhead.takeLane === "left"
+                ? "IZQUIERDA"
+                : "DERECHA";
+        antDir = nextCpAhead.takeLane || "right";
+        antBrake = cpDelta <= 220 && Boolean(nextCpAhead.recommendedSpeed && nextCpAhead.recommendedSpeed <= 40);
+      } else if (nextActionStep) {
+        const targetDist = Math.max(1, stepDelta);
+        const hint = mapModifierToSpanish(nextActionStep, Math.min(targetDist, 300));
+        antShow = true;
+        antCoord = projectVisualCoord(nextActionStep.distAlong) || nextActionStep.coord;
+        antDist = targetDist;
+        antCue = targetDist <= 450 ? cue : hint.cue;
+        antDir = hint.lane || "center";
+        antBrake =
+          isBrakingZone ||
+          (targetDist <= 220 &&
+            Boolean(nextActionStep.modifier && (nextActionStep.modifier.includes("sharp") || nextActionStep.modifier === "uturn")));
+      } else {
+        antShow = true;
+        antCoord = projectVisualCoord(totalDist);
+        antDist = Math.max(0, totalDist - curAlong);
+        antCue = "RECTO";
+        antDir = "center";
+      }
     }
 
     if (isTurnOrArrive && effectiveStepDist > 12) {
@@ -2586,7 +2646,8 @@ function updateNavigationHUD() {
     coord: antCoord,
     cue: antCue,
     distMeters: antDist,
-    isBraking: antBrake
+    isBraking: antBrake,
+    dir: antDir
   });
 }
 
@@ -2665,19 +2726,30 @@ function updateActiveCurveGroundMark(curAlong) {
   ptSrc.setData({ type: "FeatureCollection", features: pointFeatures });
 }
 
-/** Posiciona un anillo plano sutil sobre el suelo en el punto cercano de maniobra. */
-function updateAnticipation3dMarker({ show, coord, cue, distMeters, isBraking }) {
+/** Posiciona y anima la flecha 3D flotante de anticipación sobre el punto próximo de maniobra. */
+function updateAnticipation3dMarker({ show, coord, cue, distMeters, isBraking, dir = "center" }) {
   if (!state.anticipationMarker || !state.anticipationEl) return;
-  if (!show || !coord || !Number.isFinite(distMeters) || distMeters <= 14 || distMeters > 320) {
+  if (!show || !coord || !Number.isFinite(distMeters) || distMeters <= 6) {
     state.anticipationEl.classList.add("hidden");
     return;
   }
   state.anticipationEl.classList.remove("hidden");
-  state.anticipationEl.classList.toggle("is-brake", Boolean(isBraking));
   state.anticipationMarker.setLngLat(coord);
+
+  const head = state.anticipationEl.querySelector(".ant-float-head");
+  if (head) head.classList.toggle("is-brake", Boolean(isBraking));
 
   const pill = state.anticipationEl.querySelector(".ant-dist-pill");
   if (pill) pill.textContent = `${cue ? `${cue} · ` : ""}${formatDistance(distMeters)}`;
+
+  const poly = state.anticipationEl.querySelector(".ant-arrow-svg polygon");
+  if (poly) poly.setAttribute("fill", isBraking ? "#ff453a" : "url(#antArrowGrad)");
+
+  const svg = state.anticipationEl.querySelector(".ant-arrow-svg");
+  if (svg) {
+    const tilt = dir === "left" ? -28 : dir === "right" ? 28 : 0;
+    svg.style.transform = `rotateZ(${tilt}deg)`;
+  }
 }
 
 function mapModifierToSpanish(step, distMeters = Infinity) {

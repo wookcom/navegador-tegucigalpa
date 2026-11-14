@@ -53,8 +53,8 @@ html, body, #app {
   top: max(10px, env(safe-area-inset-top));
   left: 50%;
   transform: translateX(-50%);
-  width: auto;
-  max-width: min(90vw, 340px);
+  width: min(92vw, 356px);
+  max-width: min(92vw, 356px);
   z-index: 10;
   display: flex;
   flex-direction: column;
@@ -69,14 +69,15 @@ html, body, #app {
 
 .ios-nav-banner {
   display: grid;
-  grid-template-columns: 60px auto;
+  grid-template-columns: 52px minmax(0, 1fr);
+  width: 100%;
   gap: 10px;
   align-items: center;
   background: rgba(10, 14, 22, 0.78);
   backdrop-filter: blur(28px) saturate(200%);
   -webkit-backdrop-filter: blur(28px) saturate(200%);
   border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 999px;
+  border-radius: 26px;
   padding: 8px 14px;
   box-shadow: var(--ios-shadow);
   transition: opacity 0.28s ease, transform 0.28s ease, border-color 0.2s ease, box-shadow 0.2s ease;
@@ -188,9 +189,9 @@ html, body, #app {
 /* 3-Lane Icon-Only Fork Indicator */
 .ios-lane-bar {
   display: grid;
-  grid-template-columns: repeat(3, auto);
-  justify-content: start;
-  gap: 4px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
+  gap: 5px;
   margin-top: 2px;
 }
 
@@ -329,8 +330,8 @@ html, body, #app {
 
 .ios-bridge-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
-  gap: 5px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+  gap: 6px;
 }
 
 .bridge-path-item {
@@ -435,9 +436,11 @@ html, body, #app {
 }
 
 .racing-telemetry {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto auto minmax(56px, 1fr);
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  width: 100%;
 }
 
 .speedo-block {
@@ -534,13 +537,21 @@ html, body, #app {
 }
 
 .ios-segmented {
-  display: inline-flex;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(52px, 1fr);
+  width: 100%;
   background: rgba(255, 255, 255, 0.08);
   padding: 2px;
   border-radius: 10px;
   gap: 2px;
   overflow-x: auto;
+  scrollbar-width: none;
   max-width: 100%;
+}
+
+.ios-segmented::-webkit-scrollbar {
+  display: none;
 }
 
 .leg-pill {
@@ -569,9 +580,11 @@ html, body, #app {
 }
 
 .ios-dock-actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto auto auto minmax(72px, 1fr);
   align-items: center;
-  gap: 7px;
+  gap: 6px;
+  width: 100%;
 }
 
 button {
@@ -618,8 +631,8 @@ button {
 }
 
 #simScrubber {
-  flex: 1;
-  min-width: 70px;
+  width: 100%;
+  min-width: 0;
   accent-color: var(--ios-blue);
   cursor: pointer;
 }
@@ -674,66 +687,114 @@ button {
 }
 
 /* =========================================================================
-   SUBTLE GROUND TARGET MARKER FOR UPCOMING MANEUVER (FLAT ON ASPHALT)
+   FLOATING 3D DISTANT MANEUVER MARKER (ALWAYS VISIBLE ANIMATED ARROW)
    ========================================================================= */
 .anticipation-3d-marker {
   pointer-events: none;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  transform-origin: center center;
+  transform-origin: bottom center;
   will-change: transform, opacity;
-  opacity: 0.44;
-  z-index: 3;
+  z-index: 4;
 }
 
 .anticipation-3d-marker.hidden {
   display: none !important;
 }
 
-.ant-ground-ring {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  border: 2px solid rgba(48, 209, 88, 0.72);
-  background: rgba(48, 209, 88, 0.12);
-  box-shadow: 0 0 8px rgba(48, 209, 88, 0.35);
-  animation: antRingPulse 2.1s ease-out infinite;
+.ant-float-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  animation: antFloatBob 1.25s ease-in-out infinite;
+  filter: drop-shadow(0 0 12px rgba(48, 209, 88, 0.85)) drop-shadow(0 6px 14px rgba(0, 0, 0, 0.72));
 }
 
-.anticipation-3d-marker.is-brake .ant-ground-ring {
-  border-color: rgba(255, 159, 10, 0.78);
-  background: rgba(255, 159, 10, 0.14);
-  box-shadow: 0 0 8px rgba(255, 159, 10, 0.38);
+.ant-float-head.is-brake {
+  filter: drop-shadow(0 0 14px rgba(255, 69, 58, 0.92)) drop-shadow(0 6px 14px rgba(0, 0, 0, 0.78));
+}
+
+.ant-arrow-svg {
+  width: 46px;
+  height: 46px;
+  display: block;
+  transition: transform 0.2s ease;
 }
 
 .ant-dist-pill {
-  margin-top: 3px;
-  padding: 1px 6px;
+  padding: 2px 8px;
   border-radius: 999px;
-  background: rgba(12, 16, 22, 0.52);
-  backdrop-filter: blur(8px);
-  border: 0.5px solid rgba(255, 255, 255, 0.22);
-  color: rgba(255, 255, 255, 0.82);
-  font-size: 9.5px;
-  font-weight: 700;
+  background: rgba(12, 16, 22, 0.86);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1.5px solid rgba(48, 209, 88, 0.88);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
   letter-spacing: 0.02em;
   white-space: nowrap;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.55);
+}
+
+.ant-float-head.is-brake .ant-dist-pill {
+  border-color: rgba(255, 69, 58, 0.92);
+  color: #ffd5d2;
+}
+
+.ant-laser-stem {
+  width: 3px;
+  height: 34px;
+  margin-top: 2px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(48, 209, 88, 0.95) 0%, rgba(10, 132, 255, 0.45) 70%, rgba(48, 209, 88, 0) 100%);
+  box-shadow: 0 0 10px rgba(48, 209, 88, 0.8);
+}
+
+.ant-float-head.is-brake + .ant-laser-stem {
+  background: linear-gradient(180deg, rgba(255, 69, 58, 0.95) 0%, rgba(255, 159, 10, 0.5) 70%, rgba(255, 69, 58, 0) 100%);
+  box-shadow: 0 0 10px rgba(255, 69, 58, 0.85);
+}
+
+.ant-ground-ring {
+  width: 34px;
+  height: 12px;
+  margin-top: -4px;
+  border-radius: 50%;
+  border: 2.5px solid #30d158;
+  background: rgba(48, 209, 88, 0.25);
+  box-shadow: 0 0 14px rgba(48, 209, 88, 0.85);
+  animation: antRingPulse 1.35s ease-out infinite;
+}
+
+.ant-float-head.is-brake ~ .ant-ground-ring {
+  border-color: #ff453a;
+  background: rgba(255, 69, 58, 0.28);
+  box-shadow: 0 0 14px rgba(255, 69, 58, 0.9);
+}
+
+@keyframes antFloatBob {
+  0%, 100% {
+    transform: translateY(0px) scale(1);
+  }
+  50% {
+    transform: translateY(-9px) scale(1.06);
+  }
 }
 
 @keyframes antRingPulse {
   0% {
-    transform: scale(0.86);
-    opacity: 0.65;
+    transform: scale(0.85);
+    opacity: 0.95;
   }
   70% {
-    transform: scale(1.24);
-    opacity: 0.18;
+    transform: scale(1.22);
+    opacity: 0.45;
   }
   100% {
-    transform: scale(0.86);
-    opacity: 0.65;
+    transform: scale(0.85);
+    opacity: 0.95;
   }
 }
 
@@ -1091,9 +1152,9 @@ button {
 }
 
 .sql-route-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   padding: 9px 11px;
   border-bottom: 0.5px solid rgba(255, 255, 255, 0.08);
@@ -1167,7 +1228,7 @@ button {
 
 .sql-cat-pills {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
   padding: 3px;
   background: rgba(118, 118, 128, 0.22);
@@ -1193,13 +1254,15 @@ button {
 }
 
 .sql-save-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 6px;
+  align-items: center;
 }
 
 .sql-save-row input {
-  flex: 1;
-  min-width: 110px;
+  width: 100%;
+  min-width: 0;
   background: rgba(118, 118, 128, 0.24);
   border: 0.5px solid rgba(255, 255, 255, 0.14);
   border-radius: 10px;
@@ -1234,10 +1297,10 @@ button {
 }
 
 .stop-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
   padding: 9px 11px;
   border-bottom: 0.5px solid rgba(255, 255, 255, 0.08);
 }
@@ -1297,13 +1360,15 @@ button {
 }
 
 .ios-search-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 6px;
+  align-items: center;
 }
 
 .ios-search-row input {
-  flex: 1;
-  min-width: 110px;
+  width: 100%;
+  min-width: 0;
   background: rgba(118, 118, 128, 0.24);
   border: 0.5px solid rgba(255, 255, 255, 0.12);
   border-radius: 10px;
@@ -1321,8 +1386,8 @@ button {
 }
 
 .search-result-item {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   background: rgba(255, 255, 255, 0.06);
@@ -1334,8 +1399,8 @@ button {
 .ios-modal-footer {
   padding: 10px 16px max(12px, env(safe-area-inset-bottom));
   border-top: 0.5px solid rgba(255, 255, 255, 0.12);
-  display: flex;
-  justify-content: flex-end;
+  display: grid;
+  grid-template-columns: 1fr 1.35fr;
   gap: 8px;
 }
 
@@ -1391,13 +1456,13 @@ body.ios-clean-mode .ios-bottom-dock {
 
 @media (max-width: 640px) {
   .ios-hud-top {
-    width: auto;
+    width: min(92vw, 336px);
     max-width: calc(100vw - 16px);
   }
   .ios-nav-banner {
-    grid-template-columns: 50px auto;
+    grid-template-columns: 48px minmax(0, 1fr);
     gap: 8px;
-    padding: 6px 12px;
+    padding: 6px 11px;
   }
   .ios-arrow-orb {
     width: 44px;
@@ -1408,10 +1473,10 @@ body.ios-clean-mode .ios-bottom-dock {
     height: 30px;
   }
   .ios-hud-title {
-    font-size: 0.9rem;
+    font-size: 0.88rem;
   }
   .ios-lane-slot {
-    padding: 3px 7px;
+    padding: 3px 6px;
   }
   .racing-turn-gate {
     padding: 3px 12px;
@@ -1424,18 +1489,26 @@ body.ios-clean-mode .ios-bottom-dock {
   .ios-map-controls {
     top: 50%;
     transform: translateY(-50%);
+    max-height: calc(100dvh - 200px);
+    overflow-y: auto;
+    scrollbar-width: none;
     gap: 4px;
     padding: 4px;
   }
+  .ios-map-controls::-webkit-scrollbar {
+    display: none;
+  }
   .ios-ctrl-btn {
     width: 38px;
-    height: 36px;
+    height: 35px;
+    flex-shrink: 0;
   }
   .ios-ctrl-btn.ios-ctrl-mini {
     height: 30px;
   }
   .ios-bottom-dock {
-    width: calc(100vw - 16px);
+    width: min(94vw, 420px);
+    max-width: calc(100vw - 16px);
   }
   .ios-dock-card {
     padding: 7px 10px;
@@ -1443,5 +1516,71 @@ body.ios-clean-mode .ios-bottom-dock {
   }
   .speedo-value {
     font-size: 1.45rem;
+  }
+  .ios-modal-backdrop {
+    padding: 0;
+  }
+  .ios-modal-sheet {
+    width: 100vw;
+    max-height: 88vh;
+    max-height: 88dvh;
+    border-radius: 22px 22px 0 0;
+  }
+  .ant-arrow-svg {
+    width: 38px;
+    height: 38px;
+  }
+  .ant-laser-stem {
+    height: 26px;
+  }
+  .ant-ground-ring {
+    width: 28px;
+    height: 10px;
+  }
+}
+
+@media (max-width: 390px) {
+  .ios-hud-top {
+    width: calc(100vw - 14px);
+  }
+  .ios-nav-banner {
+    grid-template-columns: 44px minmax(0, 1fr);
+    padding: 6px 10px;
+  }
+  .ios-arrow-orb {
+    width: 40px;
+    height: 40px;
+  }
+  .ios-arrow-3d {
+    width: 26px;
+    height: 26px;
+  }
+  .ios-hud-title {
+    font-size: 0.82rem;
+  }
+  .ios-bottom-dock {
+    width: calc(100vw - 12px);
+  }
+  .ios-ctrl-btn {
+    width: 34px;
+    height: 33px;
+  }
+  .ios-ctrl-btn.ios-ctrl-mini {
+    height: 28px;
+  }
+  .ios-accordion-summary {
+    padding: 9px 10px;
+  }
+  .ios-acc-title {
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 360px) {
+  .sql-save-row {
+    grid-template-columns: 1fr;
+  }
+  .ios-modal-footer {
+    grid-template-columns: 1fr;
   }
 }
