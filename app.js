@@ -1,13 +1,56 @@
 /**
- * NavGame TGU — Navegador GPS con Flecha 3D, Multicamino y Alertas de Puentes
- * Diseñado para resolver desvíos, retornos y pasos a desnivel entre Choluteca y Tegucigalpa.
+ * NavTGU — Navegador GPS minimalista estilo iOS con vista Satélite Híbrida,
+ * flecha 3D direccional y trazado multicamino para desvíos en Tegucigalpa.
  */
 
 const STORAGE_KEY = "navgame_tgu_itinerary_v1";
 
+const SATELLITE_HYBRID_STYLE = {
+  version: 8,
+  sources: {
+    "esri-satellite": {
+      type: "raster",
+      tiles: [
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+      ],
+      tileSize: 256,
+      maxzoom: 19,
+      attribution: "Esri, Maxar, Earthstar Geographics"
+    },
+    "esri-roads": {
+      type: "raster",
+      tiles: [
+        "https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}"
+      ],
+      tileSize: 256,
+      maxzoom: 19
+    },
+    "esri-labels": {
+      type: "raster",
+      tiles: [
+        "https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
+      ],
+      tileSize: 256,
+      maxzoom: 19
+    }
+  },
+  layers: [
+    { id: "esri-sat-base", type: "raster", source: "esri-satellite" },
+    { id: "esri-roads-overlay", type: "raster", source: "esri-roads", paint: { "raster-opacity": 0.72 } },
+    { id: "esri-labels-overlay", type: "raster", source: "esri-labels", paint: { "raster-opacity": 0.9 } }
+  ]
+};
+
 const MAP_STYLES = {
-  dark: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
-  light: "https://tiles.openfreemap.org/styles/liberty"
+  satellite: SATELLITE_HYBRID_STYLE,
+  light: "https://tiles.openfreemap.org/styles/liberty",
+  dark: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
+};
+
+const THEME_LABELS = {
+  satellite: "Satélite",
+  light: "Mapa",
+  dark: "Oscuro"
 };
 
 const FALLBACK_OSM_STYLE = {
@@ -17,7 +60,7 @@ const FALLBACK_OSM_STYLE = {
       type: "raster",
       tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
       tileSize: 256,
-      attribution: "© OpenStreetMap contributors"
+      attribution: "OpenStreetMap contributors"
     }
   },
   layers: [{ id: "osm", type: "raster", source: "osm" }]
@@ -37,12 +80,12 @@ const DEFAULT_STOPS = [
 const TEGUCIGALPA_CHECKPOINTS = [
   {
     id: "cp-loarque",
-    shortLabel: "1. Loarque / Anillo",
+    shortLabel: "1. Loarque",
     title: "Entrada Sur: Rampa al Anillo Periférico",
     lat: 14.047694,
     lng: -87.212571,
     takeLane: "right",
-    actionHeadline: "CARRIL DERECHO → Rampa al Anillo Periférico Este",
+    actionHeadline: "Carril Derecho → Rampa Anillo Periférico",
     voiceAlert: "Atención puente Loarque. Toma el carril derecho hacia la rampa del Anillo Periférico rumbo a Suyapa. No sigas recto hacia Comayagüela.",
     paths: [
       {
@@ -80,17 +123,17 @@ const TEGUCIGALPA_CHECKPOINTS = [
   },
   {
     id: "cp-suyapa",
-    shortLabel: "2. Puente Suyapa",
+    shortLabel: "2. Suyapa",
     title: "Anillo → Salida Bulevar Suyapa / San Judas",
     lat: 14.081797,
     lng: -87.160378,
     takeLane: "right",
-    actionHeadline: "LATERAL DERECHO ANTES DEL PUENTE → Bulevar Suyapa",
+    actionHeadline: "Lateral Derecho antes del puente → Blvd. Suyapa",
     voiceAlert: "Atención desvío a Suyapa. Mantén el carril lateral derecho antes del puente para bajar al Bulevar Suyapa. No subas el puente del Anillo.",
     paths: [
       {
         type: "take",
-        label: "TOMAR: Carril Lateral Derecho → Salida a Bulevar Suyapa / Aldea Suyapa",
+        label: "TOMAR: Carril Lateral Derecho → Salida a Bulevar Suyapa",
         coords: [
           [-87.161672, 14.081376],
           [-87.160378, 14.081797],
@@ -122,17 +165,17 @@ const TEGUCIGALPA_CHECKPOINTS = [
   },
   {
     id: "cp-ffaa",
-    shortLabel: "3. Desvío FF.AA.",
+    shortLabel: "3. FF.AA.",
     title: "Anillo Periférico → Bulevar Fuerzas Armadas",
     lat: 14.068189,
     lng: -87.169322,
     takeLane: "right",
-    actionHeadline: "CARRIL DERECHO → Rampa hacia Bulevar Fuerzas Armadas",
+    actionHeadline: "Carril Derecho → Rampa Bulevar Fuerzas Armadas",
     voiceAlert: "Desvío al Bulevar Fuerzas Armadas. Toma la salida derecha hacia la rampa de conexión. No continúes por el Anillo hacia Las Uvas.",
     paths: [
       {
         type: "take",
-        label: "TOMAR: Carril Derecho → Rampa de conexión a Blvd. Fuerzas Armadas",
+        label: "TOMAR: Carril Derecho → Rampa a Blvd. Fuerzas Armadas",
         coords: [
           [-87.167489, 14.069806],
           [-87.169322, 14.068189],
@@ -168,12 +211,12 @@ const TEGUCIGALPA_CHECKPOINTS = [
     lat: 14.075232,
     lng: -87.182944,
     takeLane: "right",
-    actionHeadline: "LATERAL DERECHO (NO SUBIR PUENTE) → Salida Miraflores / Santa Cristina",
+    actionHeadline: "Lateral Derecho (no subir puente) → Miraflores",
     voiceAlert: "Atención puente Miraflores. Sal por el carril lateral derecho hacia Bulevar Centroamérica y gira a Avenida Santa Cristina. No subas el puente de Fuerzas Armadas.",
     paths: [
       {
         type: "take",
-        label: "TOMAR: Carril Lateral Derecho → Blvd. Centroamérica y giro a Av. Santa Cristina",
+        label: "TOMAR: Lateral Derecho → Blvd. Centroamérica y Av. Santa Cristina",
         coords: [
           [-87.182369, 14.075255],
           [-87.182944, 14.075232],
@@ -206,17 +249,17 @@ const TEGUCIGALPA_CHECKPOINTS = [
   },
   {
     id: "cp-cascadas",
-    shortLabel: "5. Mall Cascadas",
-    title: "Frente a Mall Las Cascadas → Hotel Comfort Inn",
+    shortLabel: "5. Cascadas",
+    title: "Frente a Mall Las Cascadas → Comfort Inn",
     lat: 14.076467,
     lng: -87.197374,
     takeLane: "right",
-    actionHeadline: "¡NO SUBIR PUENTE! Carril Lateral Derecho → Entrada Comfort Inn",
+    actionHeadline: "No subir puente: Lateral Derecho → Comfort Inn",
     voiceAlert: "Alerta crítica frente a Mall Las Cascadas. Mantén el carril lateral derecho y no subas el puente elevado. Tu entrada al Comfort Inn está a la derecha.",
     paths: [
       {
         type: "take",
-        label: "TOMAR: Carril Lateral Derecho (abajo) → Acceso directo a Comfort Inn",
+        label: "TOMAR: Lateral Derecho (abajo) → Entrada Comfort Inn",
         coords: [
           [-87.195068, 14.076286],
           [-87.197374, 14.076467],
@@ -227,7 +270,7 @@ const TEGUCIGALPA_CHECKPOINTS = [
       },
       {
         type: "avoid",
-        label: "EVITAR: Subir puente elevado de FF.AA. (pasa por encima del mall sin salida)",
+        label: "EVITAR: Subir puente elevado (pasa encima del mall sin salida)",
         coords: [
           [-87.195068, 14.076286],
           [-87.19755, 14.07662],
@@ -248,38 +291,64 @@ const TEGUCIGALPA_CHECKPOINTS = [
   }
 ];
 
+/* ================= VECTOR SVG ICON HELPER (CERO EMOJIS) ================= */
+function svgIcon(name, size = 14) {
+  const common = `width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"`;
+  switch (name) {
+    case "check":
+      return `<svg ${common}><polyline points="20 6 9 17 4 12"/></svg>`;
+    case "ban":
+      return `<svg ${common}><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>`;
+    case "flag":
+      return `<svg ${common}><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>`;
+    case "map-pin":
+      return `<svg ${common}><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`;
+    case "alert-triangle":
+      return `<svg ${common}><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
+    case "navigation":
+      return `<svg ${common} fill="currentColor"><polygon points="12 2 19 21 12 17 5 21 12 2"/></svg>`;
+    case "arrow-up":
+      return `<svg ${common}><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`;
+    case "arrow-down":
+      return `<svg ${common}><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>`;
+    case "trash":
+      return `<svg ${common}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
+    case "git-fork":
+      return `<svg ${common}><circle cx="12" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9v1a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V9"/><path d="M12 12v3"/></svg>`;
+    default:
+      return `<svg ${common}><circle cx="12" cy="12" r="9"/></svg>`;
+  }
+}
+
 /* ================= STATE ================= */
 const state = {
   stops: loadSavedStops(),
   draftStops: [],
-  activeLeg: "all", // "all" or 0, 1, 2...
-  routes: [],       // OSRM route objects
-  mainCoords: [],   // Full array of [lng, lat] for active route
-  cumDistances: [], // Cumulative meters along mainCoords
-  steps: [],        // Flattened maneuver steps
+  activeLeg: "all",
+  routes: [],
+  mainCoords: [],
+  cumDistances: [],
+  steps: [],
   totalDistance: 0,
   totalDuration: 0,
 
-  // Navigation / Simulation state
-  mode: "sim",      // "sim" | "gps"
+  mode: "sim",
   simPlaying: false,
-  simSpeed: 1,      // 1x (65 km/h), 5x, 15x
+  simSpeed: 1,
   simDistMeters: 0,
-  vehiclePos: null, // [lng, lat]
+  vehiclePos: null,
   vehicleHeading: 0,
   deviceHeading: null,
   speedKmh: 0,
   gpsWatchId: null,
   lastFrameTime: 0,
 
-  // UI state
   camera3d: true,
-  theme: "dark",
+  theme: "satellite", // Vista de satélite híbrida por defecto
   voiceEnabled: true,
   pickMode: false,
   spokenAlerts: new Set(),
 
-  // MapLibre objects
   map: null,
   mapReady: false,
   vehicleMarker: null,
@@ -362,8 +431,7 @@ function calculateBearing([lng1, lat1], [lng2, lat2]) {
 }
 
 function normalizeAngle(deg) {
-  let d = ((deg + 180) % 360 + 360) % 360 - 180;
-  return d;
+  return ((deg + 180) % 360 + 360) % 360 - 180;
 }
 
 function formatDistance(meters) {
@@ -411,7 +479,7 @@ function saveStops(stops) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stops));
   } catch {
-    // Ignorar en modo privado sin cuota
+    // Ignorar sin cuota
   }
 }
 
@@ -422,7 +490,7 @@ function initMap() {
     container: "map",
     style: MAP_STYLES[state.theme],
     center: [-87.185, 14.072],
-    zoom: 13,
+    zoom: 14,
     pitch: 58,
     bearing: 0,
     antialias: true
@@ -445,13 +513,12 @@ function initMap() {
     if (!state.pickMode) return;
     state.pickMode = false;
     const { lng, lat } = e.lngLat;
-    const customStop = {
+    state.draftStops.push({
       id: `custom-${Date.now()}`,
       name: `Punto elegido (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
       lat,
       lng
-    };
-    state.draftStops.push(customStop);
+    });
     el.itineraryModal.classList.remove("hidden");
     renderDraftStopsList();
     showToast("Parada agregada desde el mapa");
@@ -473,7 +540,7 @@ function ensureRouteLayers() {
     if (!m.getSource(id)) m.addSource(id, spec);
   }
 
-  // 1. Rutas alternativas OSRM (ámbar punteado)
+  // Rutas alternativas OSRM
   if (!m.getLayer("alt-routes-layer")) {
     m.addLayer({
       id: "alt-routes-layer",
@@ -481,15 +548,30 @@ function ensureRouteLayers() {
       source: "alt-routes-src",
       layout: { "line-join": "round", "line-cap": "round" },
       paint: {
-        "line-color": "#ffb800",
-        "line-width": 6,
-        "line-opacity": 0.72,
-        "line-dasharray": [2, 2]
+        "line-color": "#ff9f0a",
+        "line-width": 5.5,
+        "line-opacity": 0.85,
+        "line-dasharray": [2, 1.5]
       }
     });
   }
 
-  // 2. Caminos / Retornos a EVITAR en puentes (rojo neón punteado)
+  // Halo de contraste para caminos rojos sobre satélite
+  if (!m.getLayer("avoid-forks-casing")) {
+    m.addLayer({
+      id: "avoid-forks-casing",
+      type: "line",
+      source: "avoid-forks-src",
+      layout: { "line-join": "round", "line-cap": "round" },
+      paint: {
+        "line-color": "#1a0608",
+        "line-width": 10,
+        "line-opacity": 0.65
+      }
+    });
+  }
+
+  // Caminos / Retornos a evitar en rojo Apple
   if (!m.getLayer("avoid-forks-layer")) {
     m.addLayer({
       id: "avoid-forks-layer",
@@ -497,30 +579,30 @@ function ensureRouteLayers() {
       source: "avoid-forks-src",
       layout: { "line-join": "round", "line-cap": "round" },
       paint: {
-        "line-color": "#ff3b5c",
-        "line-width": 7,
-        "line-opacity": 0.88,
-        "line-dasharray": [1.5, 1.5]
+        "line-color": "#ff453a",
+        "line-width": 6.5,
+        "line-opacity": 0.95,
+        "line-dasharray": [1.6, 1.4]
       }
     });
   }
 
-  // 3. Glow de la ruta principal correcta
-  if (!m.getLayer("main-route-glow")) {
+  // Casing oscuro/blanco para contraste sobre imagen satelital
+  if (!m.getLayer("main-route-casing")) {
     m.addLayer({
-      id: "main-route-glow",
+      id: "main-route-casing",
       type: "line",
       source: "main-route-src",
       layout: { "line-join": "round", "line-cap": "round" },
       paint: {
-        "line-color": "#00ff88",
-        "line-width": 14,
-        "line-opacity": 0.28
+        "line-color": "#ffffff",
+        "line-width": 10.5,
+        "line-opacity": 0.88
       }
     });
   }
 
-  // 4. Línea principal correcta (verde neón)
+  // Ruta correcta en verde Apple
   if (!m.getLayer("main-route-layer")) {
     m.addLayer({
       id: "main-route-layer",
@@ -528,14 +610,14 @@ function ensureRouteLayers() {
       source: "main-route-src",
       layout: { "line-join": "round", "line-cap": "round" },
       paint: {
-        "line-color": "#00ff88",
+        "line-color": "#30d158",
         "line-width": 6.5,
-        "line-opacity": 0.96
+        "line-opacity": 1
       }
     });
   }
 
-  // 5. Ramas correctas reforzadas en los 5 puentes críticos
+  // Refuerzo en ramas de puente
   if (!m.getLayer("take-forks-layer")) {
     m.addLayer({
       id: "take-forks-layer",
@@ -543,20 +625,19 @@ function ensureRouteLayers() {
       source: "take-forks-src",
       layout: { "line-join": "round", "line-cap": "round" },
       paint: {
-        "line-color": "#7dffbd",
-        "line-width": 8,
+        "line-color": "#64ff9b",
+        "line-width": 7,
         "line-opacity": 0.95
       }
     });
   }
 
-  // Interactividad al tocar rutas alternativas o caminos rojos en el mapa
   m.on("click", "avoid-forks-layer", (e) => {
     const label = e.features?.[0]?.properties?.label;
     if (label) {
       new maplibregl.Popup()
         .setLngLat(e.lngLat)
-        .setHTML(`<strong style="color:#ff3b5c">⛔ ${label}</strong>`)
+        .setHTML(`<strong style="color:#ff453a">${label}</strong>`)
         .addTo(m);
     }
   });
@@ -566,7 +647,7 @@ function ensureRouteLayers() {
     if (label) {
       new maplibregl.Popup()
         .setLngLat(e.lngLat)
-        .setHTML(`<strong style="color:#ffb800">🔀 ${label}</strong>`)
+        .setHTML(`<strong style="color:#ff9f0a">${label}</strong>`)
         .addTo(m);
     }
   });
@@ -576,7 +657,7 @@ function emptyFC() {
   return { type: "FeatureCollection", features: [] };
 }
 
-/* ================= OSRM ROUTING & MULTI-PATH EXTRACTION ================= */
+/* ================= OSRM ROUTING ================= */
 function getActiveStops() {
   if (state.activeLeg === "all") return state.stops;
   const idx = Number(state.activeLeg);
@@ -590,8 +671,8 @@ async function fetchAndBuildRoutes() {
   const activeStops = getActiveStops();
   if (activeStops.length < 2) return;
 
-  el.hudTitle.textContent = "Calculando caminos y desvíos…";
-  el.hudSubtitle.textContent = "Consultando ruta óptima y alternativas en carretera";
+  el.hudTitle.textContent = "Calculando ruta satelital…";
+  el.hudSubtitle.textContent = "Consultando caminos y desvíos en tiempo real";
 
   const coordStr = activeStops.map((s) => `${s.lng},${s.lat}`).join(";");
   const url = `https://router.project-osrm.org/route/v1/driving/${coordStr}?overview=full&steps=true&alternatives=3&geometries=geojson`;
@@ -603,7 +684,6 @@ async function fetchAndBuildRoutes() {
 
     state.routes = data.routes;
 
-    // Si es ruta multi-parada (OSRM no devuelve alternatives globales), pedir alternativas del tramo inicial o de Tegucigalpa
     if (activeStops.length > 2 && state.routes.length === 1) {
       const legStart = activeStops[1] || activeStops[0];
       const legEnd = activeStops[2] || activeStops[1];
@@ -616,16 +696,16 @@ async function fetchAndBuildRoutes() {
           state.routes.push(...altData.routes.slice(1));
         }
       } catch {
-        // Opcional: si falla el fetch secundario continuamos con la ruta principal
+        // Opcional si no hay rutas alternas en OSRM
       }
     }
 
     processPrimaryRoute(state.routes[0]);
     renderAllMapData();
     resetVehicleToStart();
-  } catch (err) {
+  } catch {
     el.hudTitle.textContent = "Error al consultar ruta";
-    el.hudSubtitle.textContent = "Verifica tu conexión o intenta recalcular";
+    el.hudSubtitle.textContent = "Verifica tu conexión para recargar";
   }
 }
 
@@ -635,14 +715,12 @@ function processPrimaryRoute(route) {
   state.totalDistance = route.distance;
   state.totalDuration = route.duration;
 
-  // Distancias acumuladas para interpolar el vehículo en tiempo real
   const cum = [0];
   for (let i = 1; i < coords.length; i++) {
     cum.push(cum[i - 1] + haversineMeters(coords[i - 1], coords[i]));
   }
   state.cumDistances = cum;
 
-  // Extraer pasos de maniobra con su distancia acumulada aproximada
   const flatSteps = [];
   for (const leg of route.legs) {
     for (const step of leg.steps) {
@@ -662,7 +740,7 @@ function processPrimaryRoute(route) {
 
   el.metricTotalDist.textContent = `${(route.distance / 1000).toFixed(1)} km`;
   el.metricTotalTime.textContent = `${Math.round(route.duration / 60)} min`;
-  el.metricRoutesCount.textContent = `${state.routes.length} + 5 puentes`;
+  el.metricRoutesCount.textContent = `${state.routes.length} rutas · 5 puentes`;
 }
 
 function findNearestRouteProgress(point) {
@@ -678,23 +756,16 @@ function findNearestRouteProgress(point) {
   return state.cumDistances[bestIdx] || 0;
 }
 
-/* ================= RENDER MAP LAYERS & MARKERS ================= */
+/* ================= RENDER MAP LAYERS & VECTOR MARKERS ================= */
 function renderAllMapData() {
   if (!state.mapReady || !state.mainCoords.length) return;
   const m = state.map;
 
-  // Ruta principal verde
   m.getSource("main-route-src").setData({
     type: "FeatureCollection",
-    features: [
-      {
-        type: "Feature",
-        geometry: { type: "LineString", coordinates: state.mainCoords }
-      }
-    ]
+    features: [{ type: "Feature", geometry: { type: "LineString", coordinates: state.mainCoords } }]
   });
 
-  // Rutas alternativas (ámbar punteado)
   const altFeatures = state.routes.slice(1).map((r, idx) => ({
     type: "Feature",
     properties: {
@@ -702,12 +773,8 @@ function renderAllMapData() {
     },
     geometry: r.geometry
   }));
-  m.getSource("alt-routes-src").setData({
-    type: "FeatureCollection",
-    features: altFeatures
-  });
+  m.getSource("alt-routes-src").setData({ type: "FeatureCollection", features: altFeatures });
 
-  // Desvíos de los 5 puentes críticos de Tegucigalpa (Verde = tomar, Rojo = evitar)
   const takeFeatures = [];
   const avoidFeatures = [];
   for (const cp of TEGUCIGALPA_CHECKPOINTS) {
@@ -724,27 +791,27 @@ function renderAllMapData() {
   m.getSource("take-forks-src").setData({ type: "FeatureCollection", features: takeFeatures });
   m.getSource("avoid-forks-src").setData({ type: "FeatureCollection", features: avoidFeatures });
 
-  // Marcadores de paradas
   state.stopMarkers.forEach((mk) => mk.remove());
   state.stopMarkers = [];
   const activeStops = getActiveStops();
   activeStops.forEach((s, idx) => {
     const div = document.createElement("div");
     div.className = `stop-marker ${idx === 0 ? "origin" : idx === activeStops.length - 1 ? "final" : ""}`;
-    div.textContent = idx === 0 ? `🚩 ${s.name.split("(")[0].trim()}` : `${idx}. ${s.name.split("(")[0].trim()}`;
+    const icon = idx === 0 ? svgIcon("flag", 12) : svgIcon("map-pin", 12);
+    const label = s.name.split("(")[0].trim();
+    div.innerHTML = `${icon}<span>${idx === 0 ? label : `${idx}. ${label}`}</span>`;
     const mk = new maplibregl.Marker({ element: div, anchor: "bottom" })
       .setLngLat([s.lng, s.lat])
       .addTo(m);
     state.stopMarkers.push(mk);
   });
 
-  // Marcadores de los 5 puentes / desvíos
   state.forkMarkers.forEach((mk) => mk.remove());
   state.forkMarkers = [];
   TEGUCIGALPA_CHECKPOINTS.forEach((cp) => {
     const div = document.createElement("div");
     div.className = "fork-marker";
-    div.textContent = `⚠️ ${cp.shortLabel}`;
+    div.innerHTML = `${svgIcon("alert-triangle", 11)}<span>${cp.shortLabel}</span>`;
     div.addEventListener("click", () => jumpToCheckpoint(cp));
     const mk = new maplibregl.Marker({ element: div, anchor: "top" })
       .setLngLat([cp.lng, cp.lat])
@@ -752,11 +819,10 @@ function renderAllMapData() {
     state.forkMarkers.push(mk);
   });
 
-  // Marcador del vehículo
   if (!state.vehicleMarker) {
     const vEl = document.createElement("div");
     vEl.className = "vehicle-marker";
-    vEl.textContent = "▲";
+    vEl.innerHTML = svgIcon("navigation", 14);
     state.vehicleMarker = new maplibregl.Marker({ element: vEl, rotationAlignment: "map" })
       .setLngLat(state.mainCoords[0])
       .addTo(m);
@@ -782,7 +848,6 @@ function sampleRouteAtDistance(meters) {
       heading: n > 1 ? calculateBearing(coords[n - 2], coords[n - 1]) : 0
     };
   }
-  // Búsqueda binaria del segmento actual
   let lo = 0;
   let hi = cum.length - 1;
   while (lo < hi - 1) {
@@ -812,7 +877,6 @@ function resetVehicleToStart() {
 }
 
 function jumpToCheckpoint(cp) {
-  // Detener GPS si está activo y ubicar simulador ~320 metros antes del puente
   if (state.mode === "gps") stopGpsMode();
   const cpAlong = findNearestRouteProgress([cp.lng, cp.lat]);
   const startAlong = Math.max(0, cpAlong - 320);
@@ -827,9 +891,9 @@ function jumpToCheckpoint(cp) {
     state.simSpeed = 1;
     el.btnSimSpeed.textContent = "1x";
     state.simPlaying = true;
-    el.btnPlayPause.textContent = "⏸ Pausar";
+    setPlayButtonUI(true);
     state.camera3d = true;
-    el.btnToggleCamera.classList.add("active");
+    setCameraButtonUI(true);
     updateNavigationHUD();
     focusCameraOnVehicle(true);
     showToast(`Probando desvío: ${cp.title}`);
@@ -841,8 +905,8 @@ function focusCameraOnVehicle(immediate = false) {
   if (state.camera3d) {
     const opts = {
       center: state.vehiclePos,
-      zoom: 16.8,
-      pitch: 62,
+      zoom: 17,
+      pitch: 60,
       bearing: state.vehicleHeading
     };
     if (immediate) state.map.jumpTo(opts);
@@ -851,7 +915,7 @@ function focusCameraOnVehicle(immediate = false) {
     state.map.easeTo({
       center: state.vehiclePos,
       bearing: 0,
-      pitch: 20,
+      pitch: 15,
       duration: immediate ? 0 : 250
     });
   }
@@ -860,7 +924,6 @@ function focusCameraOnVehicle(immediate = false) {
 function updateNavigationHUD() {
   if (!state.vehiclePos || !state.mainCoords.length) return;
 
-  // Actualizar marcador del vehículo
   if (state.vehicleMarker) {
     state.vehicleMarker.setLngLat(state.vehiclePos).setRotation(state.vehicleHeading);
   }
@@ -870,7 +933,6 @@ function updateNavigationHUD() {
     el.simScrubber.value = String(Math.round((state.simDistMeters / totalDist) * 1000));
   }
 
-  // Punto adelantado (look-ahead 90m) para apuntar la flecha 3D estilo videojuego
   const curAlong = state.mode === "sim" ? state.simDistMeters : findNearestRouteProgress(state.vehiclePos);
   const lookAhead = sampleRouteAtDistance(Math.min(totalDist, curAlong + 90));
   const targetBearing = lookAhead ? calculateBearing(state.vehiclePos, lookAhead.coord) : state.vehicleHeading;
@@ -881,7 +943,6 @@ function updateNavigationHUD() {
   el.arrow3d.style.transform = `rotateX(34deg) rotateZ(${arrowAngle.toFixed(1)}deg)`;
   el.speedBadge.textContent = `${Math.round(state.speedKmh)} km/h`;
 
-  // 1. Verificar cercanía a los 5 puentes/desvíos críticos de Tegucigalpa
   let nearestCp = null;
   let nearestCpDist = Infinity;
   for (const cp of TEGUCIGALPA_CHECKPOINTS) {
@@ -892,12 +953,10 @@ function updateNavigationHUD() {
     }
   }
 
-  // 2. Verificar próxima maniobra OSRM
   const nextStep = state.steps.find((st) => st.distAlong > curAlong + 15) || state.steps[state.steps.length - 1];
   const nextStepDist = nextStep ? Math.max(0, nextStep.distAlong - curAlong) : 0;
 
   if (nearestCp) {
-    // MODO ALERTA DE PUENTE / DESVÍO CRÍTICO
     el.hudCard.classList.add("checkpoint-active");
     el.checkpointBadge.classList.remove("hidden");
     el.bridgeAlert.classList.remove("hidden");
@@ -905,13 +964,13 @@ function updateNavigationHUD() {
     el.hudTitle.textContent = nearestCp.actionHeadline;
     el.hudSubtitle.textContent = nearestCp.title;
 
-    el.bridgeAlertTitle.textContent = `⚠️ ${nearestCp.title}`;
+    el.bridgeAlertTitle.textContent = nearestCp.title;
     el.bridgeAlertDist.textContent = `a ${formatDistance(nearestCpDist)}`;
     el.bridgePathsGrid.innerHTML = nearestCp.paths
-      .map(
-        (p) =>
-          `<div class="bridge-path-item ${p.type}">${p.type === "take" ? "✅" : "⛔"} ${p.label}</div>`
-      )
+      .map((p) => {
+        const icon = p.type === "take" ? svgIcon("check", 13) : svgIcon("ban", 13);
+        return `<div class="bridge-path-item ${p.type}">${icon}<span>${p.label}</span></div>`;
+      })
       .join("");
 
     highlightLanes(nearestCp.takeLane, true);
@@ -919,10 +978,9 @@ function updateNavigationHUD() {
     if (nearestCpDist <= 500 && nearestCpDist > 220) {
       speakSpanish(nearestCp.voiceAlert, `${nearestCp.id}-far`);
     } else if (nearestCpDist <= 200) {
-      speakSpanish(`Ahora, a ${Math.round(nearestCpDist)} metros: ${nearestCp.actionHeadline}`, `${nearestCp.id}-near`);
+      speakSpanish(`A ${Math.round(nearestCpDist)} metros: ${nearestCp.actionHeadline}`, `${nearestCp.id}-near`);
     }
   } else {
-    // MODO CONDUCCIÓN NORMAL CON MANIOBRA OSRM
     el.hudCard.classList.remove("checkpoint-active");
     el.checkpointBadge.classList.add("hidden");
     el.bridgeAlert.classList.add("hidden");
@@ -930,13 +988,13 @@ function updateNavigationHUD() {
     el.hudDistance.textContent = formatDistance(nextStepDist);
     const { lane, label } = mapModifierToSpanish(nextStep);
     el.hudTitle.textContent = label;
-    el.hudSubtitle.textContent = nextStep?.name ? `Vía: ${nextStep.name}` : "Mantente sobre el camino verde";
+    el.hudSubtitle.textContent = nextStep?.name ? `Vía: ${nextStep.name}` : "Mantente en la ruta verde";
     highlightLanes(lane, false);
   }
 }
 
 function mapModifierToSpanish(step) {
-  if (!step) return { lane: "center", label: "Sigue la flecha verde" };
+  if (!step) return { lane: "center", label: "Sigue la ruta verde" };
   const m = step.modifier;
   const street = step.name ? ` hacia ${step.name}` : "";
   if (step.type === "arrive") return { lane: "center", label: `Llegaste a tu destino${street}` };
@@ -946,15 +1004,12 @@ function mapModifierToSpanish(step) {
 }
 
 function highlightLanes(activeLane, markOthersAvoid) {
-  const slots = el.laneForkBar.querySelectorAll(".lane-slot");
+  const slots = el.laneForkBar.querySelectorAll(".ios-lane-slot");
   slots.forEach((slot) => {
     const lane = slot.dataset.lane;
     slot.classList.remove("lane-take", "lane-avoid");
-    if (lane === activeLane) {
-      slot.classList.add("lane-take");
-    } else if (markOthersAvoid) {
-      slot.classList.add("lane-avoid");
-    }
+    if (lane === activeLane) slot.classList.add("lane-take");
+    else if (markOthersAvoid) slot.classList.add("lane-avoid");
   });
 }
 
@@ -965,7 +1020,6 @@ function animationLoop(ts) {
     const dt = Math.min(0.1, (ts - state.lastFrameTime) / 1000);
     state.lastFrameTime = ts;
 
-    // Velocidad base 1x = 18 m/s (~65 km/h); escalable a 5x o 15x para carretera larga
     const metersPerSec = 18 * state.simSpeed;
     state.speedKmh = metersPerSec * 3.6;
     const maxDist = state.cumDistances[state.cumDistances.length - 1] || 0;
@@ -981,8 +1035,8 @@ function animationLoop(ts) {
 
     if (state.simDistMeters >= maxDist) {
       state.simPlaying = false;
-      el.btnPlayPause.textContent = "▶ Simular Viaje";
-      showToast("Llegaste al destino final del viaje");
+      setPlayButtonUI(false);
+      showToast("Llegaste al destino final");
     }
   } else {
     state.lastFrameTime = ts;
@@ -990,18 +1044,38 @@ function animationLoop(ts) {
   requestAnimationFrame(animationLoop);
 }
 
+function setPlayButtonUI(playing) {
+  el.btnPlayPause.innerHTML = playing
+    ? `<i data-lucide="pause" class="ico-sm"></i><span>Pausar</span>`
+    : `<i data-lucide="play" class="ico-sm"></i><span>Simular</span>`;
+  refreshLucideIcons();
+}
+
+function setCameraButtonUI(is3d) {
+  el.btnToggleCamera.classList.toggle("active", is3d);
+  el.btnToggleCamera.innerHTML = `<i data-lucide="compass" class="ico-md"></i><span>${is3d ? "3D" : "2D"}</span>`;
+  refreshLucideIcons();
+}
+
+function refreshLucideIcons() {
+  if (window.lucide && typeof window.lucide.createIcons === "function") {
+    window.lucide.createIcons();
+  }
+}
+
 function startGpsMode() {
   if (!("geolocation" in navigator)) {
-    showToast("Tu navegador no soporta GPS en tiempo real");
+    showToast("GPS no soportado en este navegador");
     return;
   }
   state.mode = "gps";
   state.simPlaying = false;
-  el.btnPlayPause.textContent = "▶ Simular Viaje";
-  el.btnStartGps.textContent = "⏹ Detener GPS";
+  setPlayButtonUI(false);
+  el.btnStartGps.innerHTML = `<i data-lucide="navigation" class="ico-sm"></i><span>Detener</span>`;
   el.btnStartGps.classList.add("active-gps");
-  el.modeBadge.textContent = "GPS EN VIVO";
+  el.modeBadge.textContent = "GPS en vivo";
   el.modeBadge.classList.add("gps-live");
+  refreshLucideIcons();
 
   window.addEventListener("deviceorientationabsolute", onDeviceCompass, true);
   window.addEventListener("deviceorientation", onDeviceCompass, true);
@@ -1019,9 +1093,7 @@ function startGpsMode() {
       updateNavigationHUD();
       focusCameraOnVehicle(false);
     },
-    (err) => {
-      showToast(`GPS no disponible: ${err.message}`);
-    },
+    (err) => showToast(`GPS no disponible: ${err.message}`),
     { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 }
   );
 }
@@ -1034,10 +1106,11 @@ function stopGpsMode() {
   window.removeEventListener("deviceorientationabsolute", onDeviceCompass, true);
   window.removeEventListener("deviceorientation", onDeviceCompass, true);
   state.mode = "sim";
-  el.btnStartGps.textContent = "📡 GPS en Vivo";
+  el.btnStartGps.innerHTML = `<i data-lucide="navigation" class="ico-sm"></i><span>GPS</span>`;
   el.btnStartGps.classList.remove("active-gps");
-  el.modeBadge.textContent = "SIMULADOR";
+  el.modeBadge.textContent = "Simulador";
   el.modeBadge.classList.remove("gps-live");
+  refreshLucideIcons();
 }
 
 function onDeviceCompass(ev) {
@@ -1050,10 +1123,9 @@ function onDeviceCompass(ev) {
 
 /* ================= CHECKPOINT STRIP & LEG SELECTOR ================= */
 function renderCheckpointStrip() {
-  const pills = TEGUCIGALPA_CHECKPOINTS.map(
+  el.checkpointStrip.innerHTML = TEGUCIGALPA_CHECKPOINTS.map(
     (cp) => `<button type="button" class="cp-pill" data-cp="${cp.id}">${cp.shortLabel}</button>`
   ).join("");
-  el.checkpointStrip.innerHTML = `<span class="strip-label">Probar puentes:</span>${pills}`;
 
   el.checkpointStrip.querySelectorAll(".cp-pill").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -1065,11 +1137,10 @@ function renderCheckpointStrip() {
 
 function renderLegPills() {
   const stops = state.stops;
-  let html = `<button type="button" class="leg-pill ${state.activeLeg === "all" ? "active" : ""}" data-leg="all">Ruta Completa</button>`;
+  let html = `<button type="button" class="leg-pill ${state.activeLeg === "all" ? "active" : ""}" data-leg="all">Completa</button>`;
   for (let i = 0; i < stops.length - 1; i++) {
-    const shortA = stops[i].name.split("(")[0].split(",")[0].trim();
     const shortB = stops[i + 1].name.split("(")[0].split(",")[0].trim();
-    html += `<button type="button" class="leg-pill ${String(state.activeLeg) === String(i) ? "active" : ""}" data-leg="${i}">Tramo ${i + 1}: ${shortA} → ${shortB}</button>`;
+    html += `<button type="button" class="leg-pill ${String(state.activeLeg) === String(i) ? "active" : ""}" data-leg="${i}">T${i + 1}: ${shortB}</button>`;
   }
   el.legFilterPills.innerHTML = html;
 
@@ -1093,7 +1164,7 @@ function openItineraryModal() {
 function renderDraftStopsList() {
   el.stopsList.innerHTML = state.draftStops
     .map((s, idx) => {
-      const role = idx === 0 ? "Origen" : idx === state.draftStops.length - 1 ? "Destino Final" : `Parada ${idx}`;
+      const role = idx === 0 ? "Origen" : idx === state.draftStops.length - 1 ? "Destino final" : `Parada ${idx}`;
       return `
         <li class="stop-row">
           <div class="stop-info">
@@ -1102,9 +1173,9 @@ function renderDraftStopsList() {
             <div class="stop-coords">${s.lat.toFixed(5)}, ${s.lng.toFixed(5)}</div>
           </div>
           <div class="stop-actions">
-            <button type="button" class="stop-btn" data-act="up" data-idx="${idx}" title="Subir">⬆</button>
-            <button type="button" class="stop-btn" data-act="down" data-idx="${idx}" title="Bajar">⬇</button>
-            <button type="button" class="stop-btn danger" data-act="del" data-idx="${idx}" title="Eliminar">🗑</button>
+            <button type="button" class="stop-btn" data-act="up" data-idx="${idx}" title="Subir">${svgIcon("arrow-up", 14)}</button>
+            <button type="button" class="stop-btn" data-act="down" data-idx="${idx}" title="Bajar">${svgIcon("arrow-down", 14)}</button>
+            <button type="button" class="stop-btn danger" data-act="del" data-idx="${idx}" title="Eliminar">${svgIcon("trash", 14)}</button>
           </div>
         </li>
       `;
@@ -1139,7 +1210,7 @@ async function searchPlacesHonduras(query) {
     const res = await fetch(url, { headers: { "Accept-Language": "es" } });
     const items = await res.json();
     if (!items.length) {
-      el.searchResults.innerHTML = `<li class="search-result-item">Sin resultados. Prueba con el botón "📌 Tocar mapa".</li>`;
+      el.searchResults.innerHTML = `<li class="search-result-item">Sin resultados. Usa el botón Mapa para tocar un punto.</li>`;
       return;
     }
     el.searchResults.innerHTML = items
@@ -1147,7 +1218,7 @@ async function searchPlacesHonduras(query) {
         (it, i) => `
         <li class="search-result-item">
           <span>${it.display_name}</span>
-          <button type="button" class="btn-mini" data-add="${i}">+ Agregar</button>
+          <button type="button" class="ios-mini-btn" data-add="${i}">Agregar</button>
         </li>
       `
       )
@@ -1168,7 +1239,7 @@ async function searchPlacesHonduras(query) {
       });
     });
   } catch {
-    el.searchResults.innerHTML = `<li class="search-result-item">Error buscando dirección. Usa "📌 Tocar mapa".</li>`;
+    el.searchResults.innerHTML = `<li class="search-result-item">Error al buscar. Usa el botón Mapa.</li>`;
   }
 }
 
@@ -1182,7 +1253,7 @@ function bindEvents() {
   el.btnPlayPause.addEventListener("click", () => {
     if (state.mode === "gps") stopGpsMode();
     state.simPlaying = !state.simPlaying;
-    el.btnPlayPause.textContent = state.simPlaying ? "⏸ Pausar" : "▶ Simular Viaje";
+    setPlayButtonUI(state.simPlaying);
   });
 
   el.btnSimSpeed.addEventListener("click", () => {
@@ -1207,29 +1278,34 @@ function bindEvents() {
 
   el.btnToggleCamera.addEventListener("click", () => {
     state.camera3d = !state.camera3d;
-    el.btnToggleCamera.classList.toggle("active", state.camera3d);
-    el.btnToggleCamera.textContent = state.camera3d ? "🎯 3D" : "🗺️ General";
+    setCameraButtonUI(state.camera3d);
     if (!state.camera3d && state.mainCoords.length) {
       const bounds = state.mainCoords.reduce(
         (b, c) => b.extend(c),
         new maplibregl.LngLatBounds(state.mainCoords[0], state.mainCoords[0])
       );
-      state.map.fitBounds(bounds, { padding: 90, pitch: 15, bearing: 0 });
+      state.map.fitBounds(bounds, { padding: 80, pitch: 15, bearing: 0 });
     } else {
       focusCameraOnVehicle(false);
     }
   });
 
   el.btnToggleTheme.addEventListener("click", () => {
-    state.theme = state.theme === "dark" ? "light" : "dark";
-    el.btnToggleTheme.textContent = state.theme === "dark" ? "🌙 Noche" : "☀️ Día";
+    const order = ["satellite", "light", "dark"];
+    state.theme = order[(order.indexOf(state.theme) + 1) % order.length];
+    el.btnToggleTheme.innerHTML = `<i data-lucide="layers" class="ico-md"></i><span>${THEME_LABELS[state.theme]}</span>`;
+    refreshLucideIcons();
     state.mapReady = false;
     state.map.setStyle(MAP_STYLES[state.theme]);
   });
 
   el.btnToggleVoice.addEventListener("click", () => {
     state.voiceEnabled = !state.voiceEnabled;
-    el.btnToggleVoice.textContent = state.voiceEnabled ? "🔊 Voz" : "🔇 Muda";
+    el.btnToggleVoice.classList.toggle("active", state.voiceEnabled);
+    el.btnToggleVoice.innerHTML = state.voiceEnabled
+      ? `<i data-lucide="volume-2" class="ico-md"></i><span>Voz</span>`
+      : `<i data-lucide="volume-x" class="ico-md"></i><span>Muda</span>`;
+    refreshLucideIcons();
     if (state.voiceEnabled) speakSpanish("Alertas de puentes por voz activadas.");
   });
 
@@ -1252,7 +1328,7 @@ function bindEvents() {
       (pos) => {
         state.draftStops[0] = {
           id: "gps-origin",
-          name: "Mi Ubicación GPS Actual",
+          name: "Mi ubicación GPS actual",
           lat: pos.coords.latitude,
           lng: pos.coords.longitude
         };
@@ -1272,7 +1348,7 @@ function bindEvents() {
   el.btnPickOnMap.addEventListener("click", () => {
     state.pickMode = true;
     el.itineraryModal.classList.add("hidden");
-    showToast("Toca cualquier punto del mapa para agregarlo al viaje", 4000);
+    showToast("Toca cualquier punto del mapa para agregarlo", 4000);
   });
 
   el.btnApplyItinerary.addEventListener("click", () => {
@@ -1287,7 +1363,7 @@ function bindEvents() {
 
 /* ================= BOOTSTRAP ================= */
 document.addEventListener("DOMContentLoaded", () => {
-  el.btnToggleCamera.classList.add("active");
+  refreshLucideIcons();
   initMap();
   renderCheckpointStrip();
   renderLegPills();

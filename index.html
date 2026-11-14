@@ -3,170 +3,206 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <meta name="theme-color" content="#090d16" />
+  <meta name="theme-color" content="#000000" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <title>NavGame TGU — Flecha 3D y Desvíos Choluteca → Tegucigalpa</title>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>NavTGU — Navegación Satelital 3D · Choluteca → Tegucigalpa</title>
 
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
   <div id="app">
-    <!-- Fullscreen 3D Map Canvas -->
+    <!-- Fullscreen Satellite / Map Canvas -->
     <div id="map"></div>
 
-    <!-- Top Video-Game 3D Arrow & Lane Decision HUD -->
-    <header class="hud-top">
-      <div class="hud-card" id="hudCard">
-        <div class="hud-arrow-stage" aria-label="Flecha 3D direccional">
-          <div class="hud-arrow-ring">
-            <div class="hud-arrow-3d" id="arrow3d">
+    <!-- Top Minimalist iOS Navigation Banner -->
+    <header class="ios-hud-top">
+      <div class="ios-nav-banner" id="hudCard">
+        <div class="ios-arrow-stage" aria-label="Flecha 3D direccional">
+          <div class="ios-arrow-orb">
+            <div class="ios-arrow-3d" id="arrow3d">
               <svg viewBox="0 0 120 120" class="arrow-svg">
                 <defs>
-                  <linearGradient id="arrowGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stop-color="#6effb8" />
-                    <stop offset="55%" stop-color="#00e676" />
-                    <stop offset="100%" stop-color="#009e52" />
+                  <linearGradient id="iosArrowGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="#64ff9b" />
+                    <stop offset="55%" stop-color="#30d158" />
+                    <stop offset="100%" stop-color="#1e9e42" />
                   </linearGradient>
-                  <filter id="arrowGlow" x="-30%" y="-30%" width="160%" height="160%">
-                    <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#00ff88" flood-opacity="0.7" />
+                  <filter id="iosArrowShadow" x="-30%" y="-30%" width="160%" height="160%">
+                    <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000000" flood-opacity="0.45" />
                   </filter>
                 </defs>
-                <polygon points="60,8 106,66 78,66 78,112 42,112 42,66 14,66"
-                         fill="url(#arrowGrad)" stroke="#ffffff" stroke-width="4" stroke-linejoin="round"
-                         filter="url(#arrowGlow)" />
+                <polygon points="60,10 104,64 76,64 76,110 44,110 44,64 16,64"
+                         fill="url(#iosArrowGrad)" stroke="#ffffff" stroke-width="4" stroke-linejoin="round"
+                         filter="url(#iosArrowShadow)" />
               </svg>
             </div>
           </div>
-          <div class="hud-distance-badge" id="hudDistance">-- m</div>
+          <div class="ios-distance-pill" id="hudDistance">-- m</div>
         </div>
 
-        <div class="hud-instruction-col">
-          <div class="hud-badges-row">
-            <span class="badge badge-status" id="modeBadge">SIMULADOR</span>
-            <span class="badge badge-checkpoint hidden" id="checkpointBadge">PUENTE / DESVÍO</span>
-            <span class="badge badge-speed" id="speedBadge">0 km/h</span>
+        <div class="ios-instruction-col">
+          <div class="ios-meta-row">
+            <span class="ios-pill ios-pill-mode" id="modeBadge">Simulador</span>
+            <span class="ios-pill ios-pill-warn hidden" id="checkpointBadge">
+              <i data-lucide="alert-triangle" class="ico-xs"></i>
+              Desvío
+            </span>
+            <span class="ios-pill ios-pill-speed" id="speedBadge">0 km/h</span>
           </div>
-          <h1 class="hud-title" id="hudTitle">Calculando ruta Choluteca → Tegucigalpa…</h1>
-          <p class="hud-subtitle" id="hudSubtitle">Cargando los tramos y desvíos de puentes en tiempo real</p>
+          <h1 class="ios-hud-title" id="hudTitle">Calculando ruta…</h1>
+          <p class="ios-hud-subtitle" id="hudSubtitle">Cargando trayecto satelital y pasos a desnivel</p>
 
-          <!-- 3-Path / 3-Lane Fork Selector Indicator -->
-          <div class="lane-fork-bar" id="laneForkBar">
-            <div class="lane-slot" data-lane="left">
-              <span class="lane-icon">↖</span>
-              <span class="lane-label">Izquierdo / Retorno</span>
+          <!-- Compact 3-Lane Fork Indicator -->
+          <div class="ios-lane-bar" id="laneForkBar">
+            <div class="ios-lane-slot" data-lane="left">
+              <i data-lucide="arrow-up-left" class="ico-sm"></i>
+              <span>Izquierda / Retorno</span>
             </div>
-            <div class="lane-slot" data-lane="center">
-              <span class="lane-icon">⬆</span>
-              <span class="lane-label">Puente / Centro</span>
+            <div class="ios-lane-slot" data-lane="center">
+              <i data-lucide="arrow-up" class="ico-sm"></i>
+              <span>Puente / Centro</span>
             </div>
-            <div class="lane-slot" data-lane="right">
-              <span class="lane-icon">↗</span>
-              <span class="lane-label">Lateral Derecho</span>
+            <div class="ios-lane-slot" data-lane="right">
+              <i data-lucide="arrow-up-right" class="ico-sm"></i>
+              <span>Lateral Derecho</span>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Path Legend & Quick Action Chips -->
-      <div class="hud-toolbar">
-        <div class="legend-pills">
-          <span class="legend-pill legend-green"><i class="dot dot-green"></i> Camino Correcto</span>
-          <span class="legend-pill legend-red"><i class="dot dot-red"></i> Desvío / Retorno NO tomar</span>
-          <span class="legend-pill legend-amber"><i class="dot dot-amber"></i> Ruta Alterna</span>
+      <!-- Bridge Fork Decision Banner (auto-shown within 850m of bridge) -->
+      <div class="ios-bridge-alert hidden" id="bridgeAlert">
+        <div class="ios-bridge-header">
+          <span class="ios-bridge-title-wrap">
+            <i data-lucide="git-fork" class="ico-sm"></i>
+            <strong id="bridgeAlertTitle">Desvío de puente</strong>
+          </span>
+          <span class="ios-bridge-dist" id="bridgeAlertDist">a 250 m</span>
         </div>
-        <div class="quick-actions">
-          <button type="button" class="btn-chip" id="btnToggleItinerary" title="Configurar o reordenar destinos">⚙️ Itinerario</button>
-          <button type="button" class="btn-chip" id="btnToggleCamera" title="Cambiar entre cámara 3D y vista general">🎯 3D</button>
-          <button type="button" class="btn-chip" id="btnToggleTheme" title="Cambiar mapa Noche/Día">🌙 Noche</button>
-          <button type="button" class="btn-chip" id="btnToggleVoice" title="Activar o silenciar alertas por voz">🔊 Voz</button>
-        </div>
+        <div class="ios-bridge-grid" id="bridgePathsGrid"></div>
       </div>
     </header>
 
-    <!-- Bottom Cockpit: Active Leg Info + Bridge Quick Jump + Live GPS / Simulator Controls -->
-    <footer class="hud-bottom">
-      <!-- Bridge Checkpoint Alert Banner (shown prominently within 800m of bridge) -->
-      <div class="bridge-alert hidden" id="bridgeAlert">
-        <div class="bridge-alert-header">
-          <strong id="bridgeAlertTitle">⚠️ DESVÍO CRÍTICO DE PUENTE</strong>
-          <span id="bridgeAlertDist">a 250 m</span>
+    <!-- Right-Edge Apple Maps Style Floating Icon Gallery -->
+    <nav class="ios-map-controls" aria-label="Controles de mapa">
+      <button type="button" class="ios-ctrl-btn active" id="btnToggleTheme" title="Cambiar capa de mapa (Satélite / Mapa / Oscuro)">
+        <i data-lucide="layers" class="ico-md"></i>
+        <span>Satélite</span>
+      </button>
+      <button type="button" class="ios-ctrl-btn active" id="btnToggleCamera" title="Alternar vista 3D y vista general">
+        <i data-lucide="compass" class="ico-md"></i>
+        <span>3D</span>
+      </button>
+      <button type="button" class="ios-ctrl-btn active" id="btnToggleVoice" title="Activar o silenciar indicaciones de voz">
+        <i data-lucide="volume-2" class="ico-md"></i>
+        <span>Voz</span>
+      </button>
+      <button type="button" class="ios-ctrl-btn" id="btnToggleItinerary" title="Configurar y reordenar paradas">
+        <i data-lucide="sliders-horizontal" class="ico-md"></i>
+        <span>Ruta</span>
+      </button>
+    </nav>
+
+    <!-- Bottom Minimalist iOS Dock -->
+    <footer class="ios-bottom-dock">
+      <!-- Compact Route Legend + Bridge Jump Chips -->
+      <div class="ios-strip-row">
+        <div class="ios-legend-compact" aria-label="Leyenda de caminos">
+          <span class="ios-dot-label"><i class="dot dot-green"></i>Correcto</span>
+          <span class="ios-dot-label"><i class="dot dot-red"></i>Evitar</span>
+          <span class="ios-dot-label"><i class="dot dot-amber"></i>Alterno</span>
         </div>
-        <div class="bridge-paths-grid" id="bridgePathsGrid"></div>
+        <div class="ios-checkpoint-strip" id="checkpointStrip"></div>
       </div>
 
-      <!-- Quick Bridge Jump Pills -->
-      <div class="checkpoint-strip" id="checkpointStrip">
-        <span class="strip-label">Probar puentes:</span>
-        <!-- Populated dynamically by app.js -->
-      </div>
-
-      <!-- Main Control Bar -->
-      <div class="control-deck">
-        <div class="trip-summary">
-          <div class="trip-route-pills" id="legFilterPills">
-            <!-- Populated dynamically -->
-          </div>
-          <div class="trip-metrics" id="tripMetrics">
-            <span>Distancia: <strong id="metricTotalDist">-- km</strong></span>
-            <span>Tiempo est.: <strong id="metricTotalTime">-- min</strong></span>
-            <span>Rutas mostradas: <strong id="metricRoutesCount">1</strong></span>
+      <!-- Segmented Tramo Selector + Compact Action Bar -->
+      <div class="ios-dock-card">
+        <div class="ios-dock-top">
+          <div class="ios-segmented" id="legFilterPills"></div>
+          <div class="ios-metrics">
+            <span id="metricTotalDist">-- km</span>
+            <span class="sep">·</span>
+            <span id="metricTotalTime">-- min</span>
+            <span class="sep">·</span>
+            <span id="metricRoutesCount">--</span>
           </div>
         </div>
 
-        <div class="sim-gps-row">
-          <button type="button" class="btn-primary btn-gps" id="btnStartGps">📡 GPS en Vivo</button>
-          <button type="button" class="btn-accent" id="btnPlayPause">▶ Simular Viaje</button>
-          <button type="button" class="btn-secondary" id="btnSimSpeed">1x</button>
-          <input type="range" id="simScrubber" min="0" max="1000" value="0" aria-label="Posición simulada en la ruta" />
+        <div class="ios-dock-actions">
+          <button type="button" class="ios-btn ios-btn-blue" id="btnStartGps">
+            <i data-lucide="navigation" class="ico-sm"></i>
+            <span>GPS</span>
+          </button>
+          <button type="button" class="ios-btn ios-btn-green" id="btnPlayPause">
+            <i data-lucide="play" class="ico-sm"></i>
+            <span>Simular</span>
+          </button>
+          <button type="button" class="ios-btn ios-btn-glass" id="btnSimSpeed">1x</button>
+          <input type="range" id="simScrubber" min="0" max="1000" value="0" aria-label="Progreso en ruta" />
         </div>
       </div>
     </footer>
 
-    <!-- Itinerary Configurator Drawer / Modal -->
-    <aside class="modal-backdrop hidden" id="itineraryModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-      <div class="modal-panel">
-        <div class="modal-header">
+    <!-- iOS Modal Sheet: Trip Configurator -->
+    <aside class="ios-modal-backdrop hidden" id="itineraryModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="ios-modal-sheet">
+        <div class="ios-sheet-handle"></div>
+        <div class="ios-modal-header">
           <div>
-            <h2 id="modalTitle">Configurar y Reordenar Itinerario</h2>
-            <p class="modal-desc">Cambia el orden de tus paradas, usa tu GPS actual o agrega nuevas direcciones en Honduras.</p>
+            <h2 id="modalTitle">Itinerario del Viaje</h2>
+            <p class="ios-modal-desc">Reordena tus destinos, usa tu GPS actual o agrega nuevas direcciones.</p>
           </div>
-          <button type="button" class="btn-icon" id="btnCloseModal" aria-label="Cerrar">✕</button>
+          <button type="button" class="ios-close-btn" id="btnCloseModal" aria-label="Cerrar">
+            <i data-lucide="x" class="ico-sm"></i>
+          </button>
         </div>
 
-        <div class="modal-body">
-          <div class="stops-section">
-            <div class="section-head">
-              <h3>Paradas del Viaje</h3>
-              <div class="section-head-actions">
-                <button type="button" class="btn-mini" id="btnUseMyLocation">📍 Usar mi GPS como origen</button>
-                <button type="button" class="btn-mini btn-ghost" id="btnRestoreDefault">↺ Restaurar original</button>
+        <div class="ios-modal-body">
+          <div class="ios-stops-section">
+            <div class="ios-section-head">
+              <h3>Paradas</h3>
+              <div class="ios-head-actions">
+                <button type="button" class="ios-mini-btn" id="btnUseMyLocation">
+                  <i data-lucide="locate-fixed" class="ico-xs"></i>
+                  <span>Mi GPS</span>
+                </button>
+                <button type="button" class="ios-mini-btn ghost" id="btnRestoreDefault">
+                  <i data-lucide="rotate-ccw" class="ico-xs"></i>
+                  <span>Restaurar</span>
+                </button>
               </div>
             </div>
-            <ul class="stops-list" id="stopsList"></ul>
+            <ul class="ios-stops-list" id="stopsList"></ul>
           </div>
 
-          <div class="add-stop-section">
-            <h3>Agregar Dirección o Destino</h3>
-            <form id="searchForm" class="search-row">
-              <input type="text" id="searchInput" placeholder="Ej: Mall Multiplaza Tegucigalpa, Hospital Escuela…" autocomplete="off" />
-              <button type="submit" class="btn-primary">Buscar</button>
-              <button type="button" class="btn-secondary" id="btnPickOnMap" title="Haz clic en cualquier punto del mapa">📌 Tocar mapa</button>
+          <div class="ios-add-section">
+            <h3>Agregar dirección</h3>
+            <form id="searchForm" class="ios-search-row">
+              <input type="text" id="searchInput" placeholder="Buscar lugar en Honduras…" autocomplete="off" />
+              <button type="submit" class="ios-btn ios-btn-blue">
+                <i data-lucide="search" class="ico-sm"></i>
+              </button>
+              <button type="button" class="ios-btn ios-btn-glass" id="btnPickOnMap" title="Elegir tocando el mapa">
+                <i data-lucide="map-pin" class="ico-sm"></i>
+                <span>Mapa</span>
+              </button>
             </form>
-            <ul class="search-results" id="searchResults"></ul>
+            <ul class="ios-search-results" id="searchResults"></ul>
           </div>
         </div>
 
-        <div class="modal-footer">
-          <button type="button" class="btn-secondary" id="btnCancelModal">Cerrar</button>
-          <button type="button" class="btn-primary" id="btnApplyItinerary">Aplicar y Recalcular Caminos</button>
+        <div class="ios-modal-footer">
+          <button type="button" class="ios-btn ios-btn-glass" id="btnCancelModal">Cancelar</button>
+          <button type="button" class="ios-btn ios-btn-blue" id="btnApplyItinerary">Aplicar ruta</button>
         </div>
       </div>
     </aside>
 
-    <!-- Map Pick Mode Toast -->
-    <div class="toast hidden" id="toastMsg"></div>
+    <div class="ios-toast hidden" id="toastMsg"></div>
   </div>
 
   <script type="module" src="./app.js"></script>
