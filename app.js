@@ -7,6 +7,7 @@ const STORAGE_KEY = "navgame_tgu_itinerary_v1";
 
 const SATELLITE_HYBRID_STYLE = {
   version: 8,
+  glyphs: "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
   sources: {
     "esri-satellite": {
       type: "raster",
@@ -17,27 +18,86 @@ const SATELLITE_HYBRID_STYLE = {
       maxzoom: 18,
       attribution: "Esri, Maxar, Earthstar Geographics"
     },
-    "esri-roads": {
-      type: "raster",
-      tiles: [
-        "https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}"
-      ],
-      tileSize: 256,
-      maxzoom: 15
-    },
-    "esri-labels": {
-      type: "raster",
-      tiles: [
-        "https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
-      ],
-      tileSize: 256,
-      maxzoom: 14
+    "openmaptiles": {
+      type: "vector",
+      url: "https://tiles.openfreemap.org/planet"
     }
   },
   layers: [
-    { id: "esri-sat-base", type: "raster", source: "esri-satellite" },
-    { id: "esri-roads-overlay", type: "raster", source: "esri-roads", paint: { "raster-opacity": 0.72 } },
-    { id: "esri-labels-overlay", type: "raster", source: "esri-labels", paint: { "raster-opacity": 0.9 } }
+    {
+      id: "esri-sat-base",
+      type: "raster",
+      source: "esri-satellite",
+      paint: {
+        "raster-contrast": 0.14,
+        "raster-saturation": 0.08,
+        "raster-brightness-min": 0.02,
+        "raster-fade-duration": 0
+      }
+    },
+    {
+      id: "buildings-3d",
+      type: "fill-extrusion",
+      source: "openmaptiles",
+      "source-layer": "building",
+      minzoom: 13.5,
+      filter: ["!", ["has", "hide_3d"]],
+      paint: {
+        "fill-extrusion-color": [
+          "interpolate",
+          ["linear"],
+          ["coalesce", ["get", "render_height"], 10],
+          0, "#cbd5e1",
+          15, "#93c5fd",
+          40, "#60a5fa"
+        ],
+        "fill-extrusion-height": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          13.5, 0,
+          14.5, ["coalesce", ["*", ["get", "render_height"], 1.4], 11]
+        ],
+        "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
+        "fill-extrusion-opacity": 0.72
+      }
+    },
+    {
+      id: "vector-road-labels",
+      type: "symbol",
+      source: "openmaptiles",
+      "source-layer": "transportation_name",
+      minzoom: 13,
+      layout: {
+        "symbol-placement": "line",
+        "text-field": ["coalesce", ["get", "name"], ["get", "ref"], ""],
+        "text-font": ["Noto Sans Regular"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 13, 11, 18, 15],
+        "text-rotation-alignment": "map"
+      },
+      paint: {
+        "text-color": "#ffffff",
+        "text-halo-color": "rgba(8, 12, 20, 0.92)",
+        "text-halo-width": 1.8
+      }
+    },
+    {
+      id: "vector-place-labels",
+      type: "symbol",
+      source: "openmaptiles",
+      "source-layer": "place",
+      minzoom: 11,
+      layout: {
+        "text-field": ["coalesce", ["get", "name"], ""],
+        "text-font": ["Noto Sans Regular"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 11, 12, 16, 15]
+      },
+      paint: {
+        "text-color": "#f8fafc",
+        "text-halo-color": "rgba(8, 12, 20, 0.92)",
+        "text-halo-width": 2
+      }
+    }
   ]
 };
 
@@ -85,8 +145,8 @@ const TEGUCIGALPA_CHECKPOINTS = [
     lat: 14.047694,
     lng: -87.212571,
     takeLane: "right",
-    actionHeadline: "Carril Derecho → Rampa Anillo Periférico",
-    voiceAlert: "Atención puente Loarque. Toma el carril derecho hacia la rampa del Anillo Periférico rumbo a Suyapa. No sigas recto hacia Comayagüela.",
+    prepHeadline: "Prepárate: Ve pasándote al carril derecho antes del puente",
+    actionHeadline: "Ahora: Toma la rampa a la derecha hacia el Anillo (evita retorno izquierdo y puente recto)",
     paths: [
       {
         type: "take",
@@ -128,8 +188,8 @@ const TEGUCIGALPA_CHECKPOINTS = [
     lat: 14.081797,
     lng: -87.160378,
     takeLane: "right",
-    actionHeadline: "Lateral Derecho antes del puente → Blvd. Suyapa",
-    voiceAlert: "Atención desvío a Suyapa. Mantén el carril lateral derecho antes del puente para bajar al Bulevar Suyapa. No subas el puente del Anillo.",
+    prepHeadline: "3 carriles adelante: Ve pasándote al carril lateral derecho antes del puente",
+    actionHeadline: "Ahora: Toma la calle lateral derecha a Blvd. Suyapa (no subas el puente central)",
     paths: [
       {
         type: "take",
@@ -170,8 +230,8 @@ const TEGUCIGALPA_CHECKPOINTS = [
     lat: 14.068189,
     lng: -87.169322,
     takeLane: "right",
-    actionHeadline: "Carril Derecho → Rampa Bulevar Fuerzas Armadas",
-    voiceAlert: "Desvío al Bulevar Fuerzas Armadas. Toma la salida derecha hacia la rampa de conexión. No continúes por el Anillo hacia Las Uvas.",
+    prepHeadline: "Prepárate: Ve pasándote al carril derecho antes del paso a desnivel",
+    actionHeadline: "Ahora: Toma la salida a la derecha hacia Fuerzas Armadas (evita el retorno)",
     paths: [
       {
         type: "take",
@@ -211,8 +271,8 @@ const TEGUCIGALPA_CHECKPOINTS = [
     lat: 14.075232,
     lng: -87.182944,
     takeLane: "right",
-    actionHeadline: "Lateral Derecho (no subir puente) → Miraflores",
-    voiceAlert: "Atención puente Miraflores. Sal por el carril lateral derecho hacia Bulevar Centroamérica y gira a Avenida Santa Cristina. No subas el puente de Fuerzas Armadas.",
+    prepHeadline: "Atención puente Miraflores: Ve pasándote al carril derecho (no subas el puente)",
+    actionHeadline: "Ahora: Toma la vía derecha bajo el puente hacia Miraflores (evita subir el puente)",
     paths: [
       {
         type: "take",
@@ -254,8 +314,8 @@ const TEGUCIGALPA_CHECKPOINTS = [
     lat: 14.076467,
     lng: -87.197374,
     takeLane: "right",
-    actionHeadline: "No subir puente: Lateral Derecho → Comfort Inn",
-    voiceAlert: "Alerta crítica frente a Mall Las Cascadas. Mantén el carril lateral derecho y no subas el puente elevado. Tu entrada al Comfort Inn está a la derecha.",
+    prepHeadline: "3 carriles en Las Cascadas: Ve pasándote al carril derecho antes del puente",
+    actionHeadline: "Ahora: Entra por el lateral derecho a Comfort Inn (no subas el puente ni tomes el retorno)",
     paths: [
       {
         type: "take",
@@ -379,6 +439,9 @@ const state = {
   dismissedCheckpointId: null,
   bridgeAlertShownAt: 0,
   lastSpokenContextId: null,
+  selectedVoice: null,
+  audioCtx: null,
+  voicePrewarmed: false,
 
   map: null,
   mapReady: false,
@@ -421,6 +484,7 @@ const el = {
   btnToggleTheme: document.getElementById("btnToggleTheme"),
   btnToggleRouteLine: document.getElementById("btnToggleRouteLine"),
   btnToggleCleanUi: document.getElementById("btnToggleCleanUi"),
+  btnRestoreUi: document.getElementById("btnRestoreUi"),
   btnToggleVoice: document.getElementById("btnToggleVoice"),
   btnZoomIn: document.getElementById("btnZoomIn"),
   btnZoomOut: document.getElementById("btnZoomOut"),
@@ -482,6 +546,105 @@ function showToast(msg, ms = 2500) {
   showToast._timer = setTimeout(() => el.toastMsg.classList.add("hidden"), ms);
 }
 
+function selectBestSpanishVoice() {
+  if (!("speechSynthesis" in window)) return null;
+  const voices = window.speechSynthesis.getVoices() || [];
+  const esVoices = voices.filter((v) => v.lang && v.lang.toLowerCase().startsWith("es"));
+  if (!esVoices.length) return null;
+
+  const preferredTokens = [
+    "natural",
+    "online",
+    "neural",
+    "google español",
+    "sabina",
+    "dalia",
+    "paulina",
+    "mónica",
+    "helena",
+    "jorge"
+  ];
+
+  let best = esVoices[0];
+  let bestScore = -1;
+  for (const v of esVoices) {
+    const name = v.name.toLowerCase();
+    const lang = v.lang.toLowerCase();
+    let score = 0;
+    if (lang.includes("hn") || lang.includes("mx") || lang.includes("419")) score += 20;
+    preferredTokens.forEach((tok, idx) => {
+      if (name.includes(tok)) score += 100 - idx * 5;
+    });
+    if (score > bestScore) {
+      bestScore = score;
+      best = v;
+    }
+  }
+  state.selectedVoice = best;
+  return best;
+}
+
+function initVoiceEngine() {
+  if (!("speechSynthesis" in window)) return;
+  selectBestSpanishVoice();
+  window.speechSynthesis.onvoiceschanged = () => {
+    selectBestSpanishVoice();
+  };
+}
+
+function prewarmAudioAndSpeech() {
+  if (state.voicePrewarmed) return;
+  state.voicePrewarmed = true;
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (AC && !state.audioCtx) state.audioCtx = new AC();
+    if (state.audioCtx && state.audioCtx.state === "suspended") {
+      state.audioCtx.resume();
+    }
+  } catch {
+    // Web Audio opcional
+  }
+  if ("speechSynthesis" in window) {
+    try {
+      selectBestSpanishVoice();
+      const warm = new SpeechSynthesisUtterance("");
+      warm.volume = 0;
+      window.speechSynthesis.speak(warm);
+    } catch {
+      // Ignorar si navegador restringe síntesis inicial
+    }
+  }
+}
+
+function playNavChime(stage) {
+  if (!state.voiceEnabled || !stage) return;
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    if (!state.audioCtx) state.audioCtx = new AC();
+    const ctx = state.audioCtx;
+    if (ctx.state === "suspended") ctx.resume();
+
+    const now = ctx.currentTime;
+    const notes = stage === "prep" ? [523.25, 659.25] : [659.25, 880.0];
+    notes.forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, now + idx * 0.085);
+      gain.gain.setValueAtTime(0.001, now + idx * 0.085);
+      gain.gain.exponentialRampToValueAtTime(0.075, now + idx * 0.085 + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.085 + 0.11);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + idx * 0.085);
+      osc.stop(now + idx * 0.085 + 0.12);
+    });
+  } catch {
+    // Web Audio opcional
+  }
+}
+
 function cancelSpeech() {
   if ("speechSynthesis" in window) {
     try {
@@ -492,16 +655,21 @@ function cancelSpeech() {
   }
 }
 
-function speakSpanish(text, alertKey, contextId = null) {
-  if (!state.voiceEnabled || !("speechSynthesis" in window)) return;
+function speakSpanish(text, alertKey, contextId = null, chimeStage = null) {
+  if (!state.voiceEnabled) return;
   if (alertKey && state.spokenAlerts.has(alertKey)) return;
   if (alertKey) state.spokenAlerts.add(alertKey);
   state.lastSpokenContextId = contextId;
+  if (chimeStage) playNavChime(chimeStage);
+  if (!("speechSynthesis" in window)) return;
   try {
     window.speechSynthesis.cancel();
     const utter = new SpeechSynthesisUtterance(text);
-    utter.lang = "es-HN";
-    utter.rate = state.mode === "sim" && state.simSpeed > 1 ? 1.28 : 1.12;
+    const voice = state.selectedVoice || selectBestSpanishVoice();
+    if (voice) utter.voice = voice;
+    utter.lang = voice?.lang || "es-HN";
+    utter.rate = state.mode === "sim" && state.simSpeed > 1 ? 1.32 : 1.15;
+    utter.pitch = 1.02;
     window.speechSynthesis.speak(utter);
   } catch {
     // Ignorar errores si el navegador bloquea autoplay de voz
@@ -542,6 +710,8 @@ function initMap() {
     pitch: 74,
     maxPitch: 82,
     bearing: 0,
+    fadeDuration: 0,
+    pixelRatio: Math.min(window.devicePixelRatio || 1, 2) * 1.25,
     antialias: true
   });
 
@@ -598,6 +768,36 @@ function initMap() {
 function ensureRouteLayers() {
   const m = state.map;
   if (!m) return;
+
+  if (m.getSource("openmaptiles") && !m.getLayer("buildings-3d") && !m.getLayer("building-3d")) {
+    m.addLayer({
+      id: "buildings-3d",
+      type: "fill-extrusion",
+      source: "openmaptiles",
+      "source-layer": "building",
+      minzoom: 13.5,
+      filter: ["!", ["has", "hide_3d"]],
+      paint: {
+        "fill-extrusion-color": [
+          "interpolate",
+          ["linear"],
+          ["coalesce", ["get", "render_height"], 10],
+          0, "#cbd5e1",
+          15, "#93c5fd",
+          40, "#60a5fa"
+        ],
+        "fill-extrusion-height": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          13.5, 0,
+          14.5, ["coalesce", ["*", ["get", "render_height"], 1.4], 11]
+        ],
+        "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
+        "fill-extrusion-opacity": 0.72
+      }
+    });
+  }
 
   const sources = {
     "alt-routes-src": { type: "geojson", data: emptyFC() },
@@ -737,11 +937,14 @@ function applyRouteLineVisibility() {
 function toggleCleanUiMode(force = null) {
   state.cleanUiMode = force !== null ? Boolean(force) : !state.cleanUiMode;
   document.body.classList.toggle("ios-clean-mode", state.cleanUiMode);
+  if (el.btnRestoreUi) {
+    el.btnRestoreUi.classList.toggle("hidden", !state.cleanUiMode);
+  }
   if (el.btnToggleCleanUi) {
     el.btnToggleCleanUi.classList.toggle("active", state.cleanUiMode);
     el.btnToggleCleanUi.innerHTML = state.cleanUiMode
-      ? `<i data-lucide="minimize-2" class="ico-md"></i><span>Ver más</span>`
-      : `<i data-lucide="maximize-2" class="ico-md"></i><span>Mapa</span>`;
+      ? `<i data-lucide="eye" class="ico-md"></i><span>Mostrar</span>`
+      : `<i data-lucide="eye-off" class="ico-md"></i><span>Ocultar</span>`;
     refreshLucideIcons();
   }
   updateNavigationHUD();
@@ -1166,7 +1369,7 @@ function updateNavigationHUD() {
   const cpPool = state.activeCheckpoints.length ? state.activeCheckpoints : [];
   for (const cp of cpPool) {
     const delta = cp.distAlong - curAlong;
-    if (delta >= -10 && delta <= 550 && delta < nearestCpDelta) {
+    if (delta >= -10 && delta <= 680 && delta < nearestCpDelta) {
       nearestCpDelta = delta;
       nearestCp = cp;
     }
@@ -1181,7 +1384,8 @@ function updateNavigationHUD() {
   const nextStepDist = nextStep ? Math.max(0, nextStep.distAlong - curAlong) : 0;
 
   const speedMps = Math.max(8, (state.speedKmh || 50) / 3.6);
-  const showLanes = !state.cleanUiMode && (Boolean(nearestCp) || nextStepDist <= 350);
+  const leadCompMeters = speedMps * 0.45;
+  const showLanes = !state.cleanUiMode && (Boolean(nearestCp) || nextStepDist <= 550);
   el.laneForkBar.classList.toggle("hidden", !showLanes);
 
   if (nearestCp) {
@@ -1197,14 +1401,15 @@ function updateNavigationHUD() {
       nearestCpDelta > 25;
 
     const dispDist = Math.max(0, nearestCpDelta);
+    const headline = dispDist > 260 ? nearestCp.prepHeadline : nearestCp.actionHeadline;
     el.hudCard.classList.add("checkpoint-active");
     el.checkpointBadge.classList.remove("hidden");
     el.bridgeAlert.classList.toggle("hidden", !showBridgeBanner);
     el.hudDistance.textContent = formatDistance(dispDist);
-    el.hudTitle.textContent = nearestCp.actionHeadline;
+    el.hudTitle.textContent = headline;
     el.hudSubtitle.textContent = state.showRouteLine
       ? nearestCp.title
-      : "Línea verde oculta · Carretera despejada";
+      : "Vista HD despejada · Mantente derecho";
 
     if (showBridgeBanner) {
       el.bridgeAlertTitle.textContent = nearestCp.title;
@@ -1219,20 +1424,13 @@ function updateNavigationHUD() {
 
     highlightLanes(nearestCp.takeLane, true);
 
-    const farTrigger = Math.min(450, Math.max(200, speedMps * 7.5));
-    const nearTrigger = Math.min(140, Math.max(55, speedMps * 3));
-    if (nearestCpDelta <= farTrigger && nearestCpDelta > nearTrigger) {
-      speakSpanish(
-        `${nearestCp.shortLabel}: ${nearestCp.actionHeadline}`,
-        `${nearestCp.id}-far`,
-        nearestCp.id
-      );
-    } else if (nearestCpDelta <= nearTrigger && nearestCpDelta > 10) {
-      speakSpanish(
-        `En ${Math.round(nearestCpDelta)} metros, ${nearestCp.actionHeadline}`,
-        `${nearestCp.id}-near`,
-        nearestCp.id
-      );
+    const effectiveDelta = nearestCpDelta - leadCompMeters;
+    const prepTrigger = Math.min(580, Math.max(300, speedMps * 9));
+    const actionTrigger = Math.min(210, Math.max(85, speedMps * 4));
+    if (effectiveDelta <= prepTrigger && effectiveDelta > actionTrigger) {
+      speakSpanish(nearestCp.prepHeadline, `${nearestCp.id}-prep`, nearestCp.id, "prep");
+    } else if (effectiveDelta <= actionTrigger && effectiveDelta > 10) {
+      speakSpanish(nearestCp.actionHeadline, `${nearestCp.id}-action`, nearestCp.id, "action");
     }
   } else {
     state.activeCheckpointId = null;
@@ -1241,35 +1439,100 @@ function updateNavigationHUD() {
     el.bridgeAlert.classList.add("hidden");
 
     el.hudDistance.textContent = formatDistance(nextStepDist);
-    const { lane, label } = mapModifierToSpanish(nextStep);
+    const { lane, label, stage } = mapModifierToSpanish(nextStep, nextStepDist);
     el.hudTitle.textContent = label;
-    el.hudSubtitle.textContent = state.showRouteLine
-      ? nextStep?.name
-        ? `Vía: ${nextStep.name}`
-        : "Mantente en la ruta verde"
-      : "Línea verde oculta · Carretera despejada";
+    if (!state.showRouteLine) {
+      el.hudSubtitle.textContent = "Vista HD despejada · Mantente derecho";
+    } else if (stage === "cruise") {
+      el.hudSubtitle.textContent = nextStep?.name
+        ? `Sigue de frente por ${nextStep.name}`
+        : "Sigue de frente por la vía principal";
+    } else {
+      el.hudSubtitle.textContent = nextStep?.name ? `Vía: ${nextStep.name}` : "Mantente derecho";
+    }
+
+    if (stage === "cruise") {
+      el.arrow3d.style.transform = "rotateX(34deg) rotateZ(0deg)";
+    }
     highlightLanes(lane, false);
 
-    const turnTrigger = Math.max(90, speedMps * 4);
+    const effectiveStepDist = nextStepDist - leadCompMeters;
     const isTurnOrArrive =
       nextStep &&
       (nextStep.type === "arrive" || (nextStep.modifier && !nextStep.modifier.includes("straight")));
-    if (isTurnOrArrive && nextStepDist <= turnTrigger && nextStepDist > 12) {
-      speakSpanish(label, `step-${Math.round(nextStep.distAlong)}`);
+    if (isTurnOrArrive && effectiveStepDist > 12) {
+      const prepStepTrigger = Math.min(520, Math.max(280, speedMps * 8));
+      const actionStepTrigger = Math.min(180, Math.max(80, speedMps * 3.8));
+      if (effectiveStepDist <= prepStepTrigger && effectiveStepDist > actionStepTrigger) {
+        const prepObj = mapModifierToSpanish(nextStep, 400);
+        speakSpanish(prepObj.label, `step-prep-${Math.round(nextStep.distAlong)}`, null, "prep");
+      } else if (effectiveStepDist <= actionStepTrigger) {
+        const actObj = mapModifierToSpanish(nextStep, 120);
+        speakSpanish(actObj.label, `step-act-${Math.round(nextStep.distAlong)}`, null, "action");
+      }
     }
   }
 
   updateForkMarkersVisibility();
 }
 
-function mapModifierToSpanish(step) {
-  if (!step) return { lane: "center", label: "Sigue la ruta verde" };
-  const m = step.modifier;
+function mapModifierToSpanish(step, distMeters = Infinity) {
+  if (!step || distMeters > 550) {
+    return { lane: "center", label: "Mantente derecho", stage: "cruise" };
+  }
+  const m = step.modifier || "straight";
   const street = step.name ? ` hacia ${step.name}` : "";
-  if (step.type === "arrive") return { lane: "center", label: `Llegaste a tu destino${street}` };
-  if (m.includes("left")) return { lane: "left", label: `Gira o mantén carril izquierdo${street}` };
-  if (m.includes("right")) return { lane: "right", label: `Toma carril o salida derecha${street}` };
-  return { lane: "center", label: `Continúa recto${street}` };
+  if (step.type === "arrive") {
+    return { lane: "center", label: `Llegaste a tu destino${street}`, stage: "action" };
+  }
+
+  const isUturn = m.includes("uturn");
+  const isLeft = !isUturn && m.includes("left");
+  const isRight = m.includes("right");
+
+  if (distMeters > 260) {
+    if (isUturn) {
+      return {
+        lane: "left",
+        label: "Con anticipación: Ve pasándote al carril izquierdo para el retorno",
+        stage: "prep"
+      };
+    }
+    if (isLeft) {
+      return {
+        lane: "left",
+        label: "Con anticipación: Ve pasándote al carril izquierdo",
+        stage: "prep"
+      };
+    }
+    if (isRight) {
+      return {
+        lane: "right",
+        label: "Con anticipación: Ve pasándote al carril derecho",
+        stage: "prep"
+      };
+    }
+    return {
+      lane: "center",
+      label: "Mantente derecho en el carril central",
+      stage: "prep"
+    };
+  }
+
+  if (isUturn) {
+    return { lane: "left", label: `Toma el retorno ahora${street}`, stage: "action" };
+  }
+  if (isLeft) {
+    return { lane: "left", label: `Toma la ruta a la izquierda${street}`, stage: "action" };
+  }
+  if (isRight) {
+    return { lane: "right", label: `Toma la ruta a la derecha${street}`, stage: "action" };
+  }
+  return {
+    lane: "center",
+    label: step.name ? `Sigue al frente por ${step.name}` : "Sigue al frente",
+    stage: "action"
+  };
 }
 
 function highlightLanes(activeLane, markOthersAvoid) {
@@ -1599,6 +1862,14 @@ function bindEvents() {
     toggleCleanUiMode();
   });
 
+  if (el.btnRestoreUi) {
+    el.btnRestoreUi.addEventListener("click", () => {
+      toggleCleanUiMode(false);
+    });
+  }
+
+  window.addEventListener("pointerdown", prewarmAudioAndSpeech, { once: true });
+
   el.btnDismissBridgeAlert.addEventListener("click", () => {
     if (state.activeCheckpointId) {
       state.dismissedCheckpointId = state.activeCheckpointId;
@@ -1686,6 +1957,7 @@ function bindEvents() {
 /* ================= BOOTSTRAP ================= */
 document.addEventListener("DOMContentLoaded", () => {
   refreshLucideIcons();
+  initVoiceEngine();
   initMap();
   renderCheckpointStrip();
   renderLegPills();

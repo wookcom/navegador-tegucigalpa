@@ -60,15 +60,15 @@
           <div class="ios-lane-bar" id="laneForkBar">
             <div class="ios-lane-slot" data-lane="left">
               <i data-lucide="arrow-up-left" class="ico-sm"></i>
-              <span>Izquierda / Retorno</span>
+              <span>Carril Izquierdo</span>
             </div>
             <div class="ios-lane-slot" data-lane="center">
               <i data-lucide="arrow-up" class="ico-sm"></i>
-              <span>Puente / Centro</span>
+              <span>Mantente Derecho</span>
             </div>
             <div class="ios-lane-slot" data-lane="right">
               <i data-lucide="arrow-up-right" class="ico-sm"></i>
-              <span>Lateral Derecho</span>
+              <span>Carril Derecho</span>
             </div>
           </div>
         </div>
@@ -102,9 +102,9 @@
         <i data-lucide="route" class="ico-md"></i>
         <span>Guía</span>
       </button>
-      <button type="button" class="ios-ctrl-btn" id="btnToggleCleanUi" title="Despejar alertas y paneles para ver el mapa completo">
-        <i data-lucide="maximize-2" class="ico-md"></i>
-        <span>Mapa</span>
+      <button type="button" class="ios-ctrl-btn" id="btnToggleCleanUi" title="Ocultar todos los controles para ver solo el mapa">
+        <i data-lucide="eye-off" class="ico-md"></i>
+        <span>Ocultar</span>
       </button>
       <button type="button" class="ios-ctrl-btn active" id="btnToggleCamera" title="Cambiar cámara: Calle 3D / Aérea 3D / 2D Ruta">
         <i data-lucide="compass" class="ico-md"></i>
@@ -126,6 +126,11 @@
         <i data-lucide="minus" class="ico-sm"></i>
       </button>
     </nav>
+
+    <button type="button" class="ios-restore-ui hidden" id="btnRestoreUi" title="Mostrar todos los controles">
+      <i data-lucide="eye" class="ico-sm"></i>
+      <span>Controles</span>
+    </button>
 
     <!-- Bottom Minimalist iOS Dock -->
     <footer class="ios-bottom-dock">

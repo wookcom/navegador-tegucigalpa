@@ -887,34 +887,37 @@ button {
   box-shadow: var(--ios-shadow);
 }
 
-/* ================= CLEAN MAP MODE (FULL VISIBILITY) ================= */
-body.ios-clean-mode .ios-strip-row,
-body.ios-clean-mode .ios-dock-top,
-body.ios-clean-mode #laneForkBar,
-body.ios-clean-mode #bridgeAlert,
-body.ios-clean-mode .ios-hud-subtitle,
-body.ios-clean-mode .ios-meta-row {
+/* ================= CLEAN MAP MODE (HIDE ALL CONTROLS) ================= */
+.ios-restore-ui {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
+  z-index: 25;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--ios-border);
+  background: var(--ios-glass-strong);
+  backdrop-filter: blur(22px) saturate(180%);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  color: #ffffff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  box-shadow: var(--ios-shadow);
+  cursor: pointer;
+}
+
+.ios-restore-ui:hover {
+  background: rgba(10, 132, 255, 0.32);
+  border-color: var(--ios-blue);
+}
+
+body.ios-clean-mode .ios-hud-top,
+body.ios-clean-mode .ios-map-controls,
+body.ios-clean-mode .ios-bottom-dock {
   display: none !important;
-}
-
-body.ios-clean-mode .ios-nav-banner {
-  grid-template-columns: 58px 1fr;
-  padding: 7px 12px;
-  gap: 10px;
-}
-
-body.ios-clean-mode .ios-arrow-orb {
-  width: 42px;
-  height: 42px;
-}
-
-body.ios-clean-mode .ios-arrow-3d {
-  width: 28px;
-  height: 28px;
-}
-
-body.ios-clean-mode .ios-dock-card {
-  padding: 7px 10px;
 }
 
 @media (max-width: 640px) {
